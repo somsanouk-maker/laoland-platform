@@ -299,3 +299,30 @@ CREATE TABLE audit_log (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_audit_entity ON audit_log (entity, entity_id);
+
+-- =====================================================================
+-- 11) saved_properties — Buyer ບັນທຶກທີ່ດິນ + ເລືອກນາຍໜ້າ
+-- =====================================================================
+CREATE TABLE saved_properties (
+  id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  buyer_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  property_id  uuid NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  broker_id    uuid REFERENCES users(id) ON DELETE SET NULL,
+  saved_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(buyer_id, property_id)
+);
+CREATE INDEX idx_saved_buyer ON saved_properties (buyer_id);
+
+-- =====================================================================
+-- 12) buyer_profiles — Buyer ຕັ້ງຄ່າຄວາມຕ້ອງການ
+-- =====================================================================
+CREATE TABLE buyer_profiles (
+  buyer_id              uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  preferred_provinces   text[],
+  preferred_districts   text[],
+  preferred_land_types  text[],
+  budget_min_lak        numeric(16,2),
+  budget_max_lak        numeric(16,2),
+  notes                 text,
+  updated_at            timestamptz NOT NULL DEFAULT now()
+);
