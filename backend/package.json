@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && cp src/db/schema.sql dist/db/schema.sql && cp src/db/seed.sql dist/db/seed.sql",
     "start": "node dist/server.js",
     "db:init": "psql \"$DATABASE_URL\" -f src/db/schema.sql && psql \"$DATABASE_URL\" -f src/db/seed.sql",
     "typecheck": "tsc --noEmit"
