@@ -62,7 +62,7 @@ router.get('/saved', asyncH(async (req: Request, res: Response) => {
             p.id, p.province, p.district, p.village, p.land_type,
             p.owner_set_price, p.price_currency, p.area_sqm,
             p.green_badge, p.status,
-            ST_Y(p.geom::geometry) AS lat, ST_X(p.geom::geometry) AS lng,
+            p.lat, p.lng,
             b.full_name AS broker_name
        FROM saved_properties sp
        JOIN properties p ON p.id = sp.property_id

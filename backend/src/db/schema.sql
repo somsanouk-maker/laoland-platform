@@ -6,9 +6,7 @@
 -- =====================================================================
 
 -- ເປີດໃຊ້ extension ທີ່ຈຳເປັນ
-CREATE EXTENSION IF NOT EXISTS postgis;     -- geometry/geography + ST_DWithin
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; -- uuid_generate_v4()
-CREATE EXTENSION IF NOT EXISTS pg_trgm;     -- fuzzy search ຊື່ບ້ານ/ເມືອງ
 
 -- ---------------------------------------------------------------------
 -- ENUM types (ກຳນົດຄ່າຄົງທີ່ ເພື່ອຄວາມສອດຄ່ອງ)
@@ -71,10 +69,9 @@ CREATE TABLE properties (
   deed_type       deed_type   NOT NULL DEFAULT 'white_paper',
   land_type       land_type   NOT NULL,
 
-  -- ★ ພິກັດ GPS — geography(Point) ໃຊ້ ST_DWithin ກວດ De-dup ກົດທີ 2 (≤30m)
-  geom            geography(Point, 4326) NOT NULL,
-  -- ຂອບເຂດໝຸດທີ່ດິນ (ຖ່າຍ Drone / ປັກໝຸດ) — optional
-  boundary        geometry(Polygon, 4326),
+  -- ★ ພິກັດ GPS — lat/lng ສຳລັບສະແດງແຜນທີ່ ແລະ De-dup ກົດທີ 2 (≤30m)
+  lat             numeric(10,7) NOT NULL,
+  lng             numeric(10,7) NOT NULL,
   area_sqm        numeric(12,2),
 
   -- ທີ່ຕັ້ງ
@@ -101,8 +98,8 @@ CREATE TABLE properties (
 
 -- index ສຳລັບ De-dup ແລະ ການຄົ້ນຫາ
 CREATE UNIQUE INDEX uq_properties_deed_no
-  ON properties (title_deed_no) WHERE title_deed_no IS NOT NULL;  -- ເລກໃບຕາດິນຫ້າມຊໍ້າ
-CREATE INDEX idx_properties_geom ON properties USING GIST (geom); -- spatial index (ST_DWithin ໄວ)
+  ON properties (title_deed_no) WHERE title_deed_no IS NOT NULL;
+CREATE INDEX idx_properties_latng ON properties (lat, lng);
 CREATE INDEX idx_properties_status ON properties (status);
 CREATE INDEX idx_properties_loc ON properties (province, district);
 

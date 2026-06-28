@@ -35,18 +35,19 @@ export async function findDuplicate(input: DedupInput): Promise<DedupMatch | nul
     if (rows.length) return { propertyId: rows[0].id, reason: 'deed_no' };
   }
 
-  // --- ກົດ 2: GPS ຢູ່ໃນລັດສະໝີ 30m (ໃຊ້ PostGIS ST_DWithin ເທິງ geography) ---
-  // ST_DWithin(geography, geography, meters) → ໄວ ຍ້ອນມີ GIST index
+  // --- ກົດ 2: GPS ຢູ່ໃນລັດສະໝີ 30m (Haversine approximate via bounding box) ---
+  const radiusDeg = (env.dedup.radiusMeters / 111320); // ~1 degree lat = 111320m
   const geoRows = await query<{ id: string; dist: number }>(
     `SELECT id,
-            ST_Distance(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS dist
+            sqrt(power((lat - $2) * 111320, 2) + power((lng - $1) * 111320 * cos(radians($2)), 2)) AS dist
        FROM properties
-      WHERE ST_DWithin(geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
+      WHERE lat BETWEEN $2 - $3 AND $2 + $3
+        AND lng BETWEEN $1 - $3 AND $1 + $3
       ORDER BY dist ASC
       LIMIT 1`,
-    [input.lng, input.lat, env.dedup.radiusMeters],
+    [input.lng, input.lat, radiusDeg],
   );
-  if (geoRows.length) {
+  if (geoRows.length && geoRows[0].dist <= env.dedup.radiusMeters) {
     return { propertyId: geoRows[0].id, reason: 'gps_radius', distanceMeters: Math.round(geoRows[0].dist) };
   }
 
@@ -99,11 +100,11 @@ export async function createProperty(input: CreatePropertyInput) {
   return withTransaction(async (client) => {
     const { rows } = await client.query(
       `INSERT INTO properties
-         (title_deed_no, deed_type, land_type, geom, area_sqm,
+         (title_deed_no, deed_type, land_type, lat, lng, area_sqm,
           province, district, village, address_text,
           owner_set_price, price_currency, created_by, status)
        VALUES
-         ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, $6,
+         ($1, $2, $3, $4, $5, $6,
           $7, $8, $9, $10, $11, $12, $13, 'pending_owner')
        RETURNING id, status`,
       [
@@ -152,7 +153,7 @@ export async function searchProperties(filters: {
   return query(
     `SELECT id, land_type, deed_type, province, district, village, area_sqm,
             owner_set_price, price_currency, price_locked, green_badge, owner_verified,
-            ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lng
+            lat, lng
        FROM properties
       WHERE ${where.join(' AND ')}
       ORDER BY green_badge DESC, created_at DESC
@@ -187,7 +188,7 @@ export async function getProperty(id: string) {
             province, district, village, address_text,
             owner_set_price, price_currency, price_locked,
             owner_verified, green_badge, status,
-            ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lng
+            lat, lng
        FROM properties WHERE id = $1`,
     [id],
   );

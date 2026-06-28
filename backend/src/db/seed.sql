@@ -14,12 +14,12 @@ ON CONFLICT (id) DO NOTHING;
 -- ທີ່ດິນຕົວຢ່າງ (ນະຄອນຫຼວງວຽງຈັນ, ໃກ້ແລວທາງລົດໄຟ)
 -- ພິກັດ: ໃຊ້ ST_MakePoint(lng, lat)
 INSERT INTO properties
-  (id, title_deed_no, deed_type, land_type, geom, area_sqm,
+  (id, title_deed_no, deed_type, land_type, lat, lng, area_sqm,
    province, district, village, owner_id, owner_set_price, price_currency,
    owner_verified, price_locked, green_badge, status, created_by)
 VALUES
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'VTE-2024-00123', 'titled', 'residential',
-   ST_SetSRID(ST_MakePoint(102.6331, 17.9757), 4326)::geography, 800.00,
+   17.9757, 102.6331, 800.00,
    'ນະຄອນຫຼວງວຽງຈັນ', 'ໄຊເສດຖາ', 'ໂພນທັນ',
    '33333333-3333-3333-3333-333333333333', 1500000000, 'LAK',
    true, true, true, 'active', '11111111-1111-1111-1111-111111111111')
