@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../services/logger.js';
 
 // Error ປະເພດທຸລະກິດ ທີ່ມີ HTTP status + ຂໍ້ມູນເພີ່ມ
 export class AppError extends Error {
@@ -12,11 +13,14 @@ export class AppError extends Error {
 }
 
 // middleware ກາງ ຈັບ error ທັງໝົດ — ຕອບ JSON ຮູບແບບດຽວກັນ
-export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
   if (err instanceof AppError) {
+    if (err.status >= 500) {
+      logger.error(err.message, { path: req.path, status: err.status });
+    }
     return res.status(err.status).json({ error: err.message, details: err.details });
   }
-  console.error('[UNHANDLED]', err);
+  logger.error('Unhandled error', { path: req.path, err: String(err) });
   return res.status(500).json({ error: 'Internal Server Error' });
 }
 

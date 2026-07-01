@@ -4,8 +4,6 @@ import { useTranslations, useLocale } from 'next-intl';
 import Link from 'next/link';
 import { api } from '../../../../../../lib/api';
 
-const DEMO_BROKER = '11111111-1111-1111-1111-111111111111';
-
 export default function RequestMandatePage({ params }: { params: { id: string } }) {
   const t = useTranslations('mandate');
   const tl = useTranslations('landType');
@@ -28,7 +26,6 @@ export default function RequestMandatePage({ params }: { params: { id: string } 
     try {
       const data = await api.requestMandate(
         { propertyId: params.id, isExclusive, commissionPct: Number(commissionPct) },
-        DEMO_BROKER,
       );
       setResult(data);
     } catch (e: any) {

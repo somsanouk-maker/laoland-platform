@@ -49,7 +49,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string; l
   useEffect(() => {
     if (authLoading) return;
     if (user?.role === 'buyer') {
-      api.getSavedProperties(user.id)
+      api.getSavedProperties()
         .then((list) => setSaved(list.some((s: any) => s.id === params.id)))
         .catch(() => {});
       setBuyerName(user.name ?? '');
@@ -69,13 +69,13 @@ export default function PropertyDetailPage({ params }: { params: { id: string; l
     if (!user || user.role !== 'buyer') return;
     if (saved) {
       setSaving(true);
-      await api.unsaveProperty(params.id, user.id).catch(() => {});
+      await api.unsaveProperty(params.id).catch(() => {});
       setSaved(false); setSaving(false);
       return;
     }
     if (brokers.length === 1) {
       setSaving(true);
-      await api.saveProperty({ propertyId: params.id, brokerId: brokers[0].broker_id }, user.id).catch(() => {});
+      await api.saveProperty({ propertyId: params.id, brokerId: brokers[0].broker_id }).catch(() => {});
       setSaved(true); setSaving(false);
     } else {
       setShowBrokerPicker(true);
@@ -85,7 +85,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string; l
   async function saveWithBroker(brokerId: string) {
     if (!user) return;
     setSaving(true); setShowBrokerPicker(false);
-    await api.saveProperty({ propertyId: params.id, brokerId: brokerId || undefined }, user.id).catch(() => {});
+    await api.saveProperty({ propertyId: params.id, brokerId: brokerId || undefined }).catch(() => {});
     setSaved(true); setSaving(false);
   }
 

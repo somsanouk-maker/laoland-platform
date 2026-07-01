@@ -8,9 +8,6 @@ import RequireRole from '../../../../components/RequireRole';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { useCurrency } from '../../../../contexts/CurrencyContext';
 
-// For demo: owner uses seed user id
-const DEMO_OWNER = '33333333-3333-3333-3333-333333333333';
-
 const STATUS_STYLE: Record<string, string> = {
   active:    'bg-green-100 text-green-700',
   revoked:   'bg-red-100 text-red-600',
@@ -25,8 +22,6 @@ export default function ApprovalsPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
 
-  const ownerId = user?.id ?? DEMO_OWNER;
-
   const [mandates, setMandates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -34,18 +29,18 @@ export default function ApprovalsPage() {
 
   async function load() {
     setLoading(true);
-    try { setMandates(await api.getOwnerMandates(ownerId)); }
+    try { setMandates(await api.getOwnerMandates()); }
     catch { setMandates([]); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [ownerId]);
+  useEffect(() => { load(); }, []);
 
   async function revoke(mandateId: string) {
     if (!confirm(t('confirmRevoke'))) return;
     setRevoking(mandateId);
     try {
-      await api.revokeOwnerMandate(mandateId, ownerId);
+      await api.revokeOwnerMandate(mandateId);
       await load();
     } catch (e: any) {
       alert(e.data?.error ?? e.message ?? t('error'));

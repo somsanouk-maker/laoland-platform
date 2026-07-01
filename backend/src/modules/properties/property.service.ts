@@ -181,6 +181,22 @@ export async function getMarketStats() {
   return rows[0];
 }
 
+// Green Badge sync — ເອີ້ນທຸກຄັ້ງຫຼັງ approve/revoke/renounce mandate ຫຼື verifyAndActivate
+// Badge = true ຖ້າ owner_verified AND ມີ exclusive mandate ທີ່ active
+export async function syncGreenBadge(propertyId: string): Promise<void> {
+  await query(
+    `UPDATE properties
+        SET green_badge = (
+          owner_verified = true AND EXISTS (
+            SELECT 1 FROM mandates
+             WHERE property_id = $1 AND is_exclusive = true AND status = 'active'
+          )
+        )
+      WHERE id = $1`,
+    [propertyId],
+  );
+}
+
 // ດຶງລາຍລະອຽດທີ່ດິນ (Showroom) — ສົ່ງ lat/lng ກັບໄປໃຫ້ frontend ສະແດງແຜນທີ່
 export async function getProperty(id: string) {
   const rows = await query(

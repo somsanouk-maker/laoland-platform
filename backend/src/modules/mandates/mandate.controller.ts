@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { AppError } from '../../middlewares/errorHandler.js';
 import * as mandate from './mandate.service.js';
+import { syncGreenBadge } from '../properties/property.service.js';
 import * as referral from './referral.service.js';
 import * as cobroke from './cobroke.service.js';
 import { query } from '../../config/db.js';
@@ -76,6 +77,17 @@ export async function acceptCoBroke(req: Request, res: Response) {
   res.json(await cobroke.acceptCoBroke(req.params.id, req.user!.id));
 }
 
+export async function rejectCoBroke(req: Request, res: Response) {
+  res.json(await cobroke.rejectCoBroke(req.params.id, req.user!.id));
+}
+
 export async function getBuyer(req: Request, res: Response) {
   res.json(await cobroke.getBuyerForBroker(req.params.id, req.user!.id));
+}
+
+// ===== Renounce mandate (broker-initiated) =====
+export async function renounceMandate(req: Request, res: Response) {
+  const result = await mandate.renounceMandate(req.user!.id, req.params.id);
+  await syncGreenBadge(result.property_id);
+  res.json({ renounced: true });
 }

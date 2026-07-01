@@ -1,7 +1,8 @@
 import { query, withTransaction } from '../../config/db.js';
 import { env } from '../../config/env.js';
 import { sha256, generateOtp } from '../../utils/hash.js';
-import { sendWhatsAppText, buildOtpMessage } from '../../services/whatsapp.js';
+import { sendWhatsAppText, buildOtpMessage, buildMandateRevokedMessage } from '../../services/whatsapp.js';
+import { syncGreenBadge } from '../properties/property.service.js';
 import { AppError } from '../../middlewares/errorHandler.js';
 
 // ---------------------------------------------------------------------
@@ -94,18 +95,30 @@ export async function verifyAndActivate(params: {
     );
     return rows[0];
   });
+
+  // ★ sync badge after transaction commits (exclusive mandate may now be active)
+  await syncGreenBadge(params.propertyId);
 }
 
 // Owner ຍົກເລີກນາຍໜ້າທີ່ບໍ່ໄດ້ຮັບອະນຸຍາດ (ກວດສິດເຈົ້າຂອງ)
 export async function revokeMandate(ownerId: string, mandateId: string) {
-  const rows = await query(
+  const rows = await query<{
+    id: string; property_id: string;
+    broker_phone: string; broker_name: string;
+    province: string; district: string;
+  }>(
     `UPDATE mandates m
         SET status = 'revoked', revoked_at = now()
-       FROM properties p
-      WHERE m.id = $1 AND m.property_id = p.id AND p.owner_id = $2
-      RETURNING m.id`,
+       FROM properties p, users u
+      WHERE m.id = $1 AND m.property_id = p.id AND p.owner_id = $2 AND u.id = m.broker_id
+     RETURNING m.id, m.property_id, u.phone_e164 AS broker_phone, u.full_name AS broker_name,
+               p.province, p.district`,
     [mandateId, ownerId],
   );
   if (!rows.length) throw new AppError(403, 'ບໍ່ມີສິດ ຫຼື ບໍ່ພົບ mandate');
+
+  const r = rows[0];
+  await syncGreenBadge(r.property_id);
+  await sendWhatsAppText(r.broker_phone, buildMandateRevokedMessage(r.broker_name, `${r.province}, ${r.district}`));
   return { revoked: true };
 }

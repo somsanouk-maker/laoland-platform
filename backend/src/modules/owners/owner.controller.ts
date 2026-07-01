@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { AppError } from '../../middlewares/errorHandler.js';
 import * as svc from './otp.service.js';
+import { syncGreenBadge } from '../properties/property.service.js';
+import { sendWhatsAppText, buildMandateApprovedMessage } from '../../services/whatsapp.js';
 
 // POST /api/owners/otp/request
 export async function requestOtp(req: Request, res: Response) {
@@ -58,18 +60,23 @@ export async function revoke(req: Request, res: Response) {
 // POST /api/owners/mandates/:id/approve — ອະນຸມັດ mandate ຂອງນາຍໜ້າ
 export async function approveMandate(req: Request, res: Response) {
   const { query } = await import('../../config/db.js');
-  // ກວດວ່າ property ເປັນຂອງ owner ນີ້ ແລະ mandate ຢູ່ໃນ 'requested'
   const rows = await query<any>(
     `UPDATE mandates m
         SET status = 'active', approved_at = now()
-       FROM properties p
+       FROM properties p, users u
       WHERE m.id = $1 AND m.property_id = p.id AND p.owner_id = $2
-        AND m.status = 'requested'
-    RETURNING m.id, m.status, m.approved_at`,
+        AND m.status = 'requested' AND u.id = m.broker_id
+    RETURNING m.id, m.status, m.approved_at, m.property_id,
+              p.province, p.district,
+              u.phone_e164 AS broker_phone, u.full_name AS broker_name`,
     [req.params.id, req.user!.id],
   );
-  if (!rows.length) throw new Error('ບໍ່ພົບ mandate ຫຼື ບໍ່ມີສິດ ຫຼື ສະຖານະບໍ່ຖືກຕ້ອງ');
-  res.json({ approved: true, mandate: rows[0] });
+  if (!rows.length) throw new AppError(403, 'ບໍ່ພົບ mandate ຫຼື ບໍ່ມີສິດ ຫຼື ສະຖານະບໍ່ຖືກຕ້ອງ');
+
+  const r = rows[0];
+  await syncGreenBadge(r.property_id);
+  await sendWhatsAppText(r.broker_phone, buildMandateApprovedMessage(r.broker_name, `${r.province}, ${r.district}`));
+  res.json({ approved: true, mandate: { id: r.id, status: r.status, approved_at: r.approved_at } });
 }
 
 // GET /api/owners/properties — ລາຍຊື່ທີ່ດິນຂອງ owner + stats

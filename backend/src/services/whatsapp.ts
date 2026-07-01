@@ -35,6 +35,24 @@ export async function sendWhatsAppText(toE164: string, body: string): Promise<Se
   return { ok: res.ok, provider: 'whatsapp' };
 }
 
+// ແຈ້ງນາຍໜ້າ: ເຈົ້າຂອງອະນຸມັດ mandate
+export function buildMandateApprovedMessage(brokerName: string, location: string): string {
+  return [
+    `LaoLand: ເຈົ້າຂອງທີ່ດິນໄດ້ອະນຸມັດ Mandate ຂອງທ່ານ`,
+    `ນາຍໜ້າ: ${brokerName} | ທີ່ດິນ: ${location}`,
+    `Your mandate for "${location}" has been approved.`,
+  ].join('\n');
+}
+
+// ແຈ້ງນາຍໜ້າ: ເຈົ້າຂອງຍົກເລີກ mandate
+export function buildMandateRevokedMessage(brokerName: string, location: string): string {
+  return [
+    `LaoLand: ເຈົ້າຂອງທີ່ດິນໄດ້ຍົກເລີກ Mandate ຂອງທ່ານ`,
+    `ນາຍໜ້າ: ${brokerName} | ທີ່ດິນ: ${location}`,
+    `Your mandate for "${location}" has been revoked by the owner.`,
+  ].join('\n');
+}
+
 // ສົ່ງ OTP — ຂໍ້ຄວາມ 3 ພາສາ ສຳລັບ Owner Gatekeeping
 export function buildOtpMessage(code: string): string {
   return [

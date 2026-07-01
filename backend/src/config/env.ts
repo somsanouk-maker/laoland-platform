@@ -15,7 +15,12 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: num('PORT', 4000),
   databaseUrl: required('DATABASE_URL'),
-  jwtSecret: process.env.JWT_SECRET ?? 'dev_secret',
+  jwtSecret: process.env.JWT_SECRET ?? 'dev_secret_change_me_in_production',
+  jwtTtlDays: num('JWT_TOKEN_TTL_DAYS', 7),
+  // Dev-only OTP bypass: set DEV_OTP=123456 in .env.local — must NOT be set in production
+  devOtp: process.env.DEV_OTP ?? '',
+  // Comma-separated allowed CORS origins
+  allowedOrigins: (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000').split(',').map((s) => s.trim()),
 
   dedup: {
     radiusMeters: num('DEDUP_RADIUS_METERS', 30),
@@ -28,8 +33,8 @@ export const env = {
     apiUrl: process.env.WHATSAPP_API_URL ?? '',
     phoneId: process.env.WHATSAPP_PHONE_ID ?? '',
     token: process.env.WHATSAPP_TOKEN ?? '',
-    otpTtlMinutes: num('OTP_TTL_MINUTES', 10),
-    otpMaxAttempts: num('OTP_MAX_ATTEMPTS', 5),
+    otpTtlMinutes: num('OTP_TTL_MINUTES', 5),
+    otpMaxAttempts: num('OTP_MAX_ATTEMPTS', 3),
   },
   quote: {
     ttlHours: num('QUOTE_TTL_HOURS', 24),

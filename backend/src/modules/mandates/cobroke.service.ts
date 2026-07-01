@@ -50,11 +50,11 @@ export async function proposeCoBroke(params: {
 
 export async function acceptCoBroke(agreementId: string, brokerId: string) {
   return withTransaction(async (client) => {
-    // ສະເພາະ listing broker (ເຈົ້າຂອງ listing) ຍອມຮັບໄດ້
+    // ສະເພາະ cobroke broker (ຝ່າຍທີ່ຖືກເຊີນ) ຍອມຮັບໄດ້
     const { rows } = await client.query(
       `UPDATE co_broke_agreements
           SET status = 'accepted'
-        WHERE id = $1 AND listing_broker_id = $2 AND status = 'proposed'
+        WHERE id = $1 AND cobroke_broker_id = $2 AND status = 'proposed'
       RETURNING id, property_id, cobroke_broker_id, buyer_id`,
       [agreementId, brokerId],
     );
@@ -69,6 +69,18 @@ export async function acceptCoBroke(agreementId: string, brokerId: string) {
     );
     return { accepted: true };
   });
+}
+
+export async function rejectCoBroke(agreementId: string, brokerId: string) {
+  const rows = await query(
+    `UPDATE co_broke_agreements
+        SET status = 'rejected'
+      WHERE id = $1 AND cobroke_broker_id = $2 AND status = 'proposed'
+     RETURNING id`,
+    [agreementId, brokerId],
+  );
+  if (!rows.length) throw new AppError(403, 'ບໍ່ມີສິດ ຫຼື ສະຖານະບໍ່ຖືກຕ້ອງ');
+  return { rejected: true };
 }
 
 // ---------------------------------------------------------------------

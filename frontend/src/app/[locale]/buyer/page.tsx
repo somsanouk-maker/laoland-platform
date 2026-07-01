@@ -11,8 +11,6 @@ import RequireRole from '../../../components/RequireRole';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useCurrency } from '../../../contexts/CurrencyContext';
 
-const DEMO_BUYER = '44444444-4444-4444-4444-444444444444';
-
 const LAND_TYPES = [
   { v: 'residential', l: 'ທີ່ດິນປຸກສ້າງ' },
   { v: 'agricultural', l: 'ທີ່ດິນກະສິກຳ' },
@@ -28,7 +26,6 @@ export default function BuyerPage() {
   const locale = useLocale();
   const { user } = useAuth();
   const { format } = useCurrency();
-  const buyerId = user?.id ?? DEMO_BUYER;
 
   const [tab, setTab] = useState<Tab>('overview');
   const [profile, setProfile] = useState<any>(null);
@@ -50,8 +47,8 @@ export default function BuyerPage() {
     setLoading(true);
     try {
       const [prof, views] = await Promise.all([
-        api.getBuyerProfile(buyerId).catch(() => null),
-        api.getBuyerViewings(buyerId).catch(() => [] as any[]),
+        api.getBuyerProfile().catch(() => null),
+        api.getBuyerViewings().catch(() => [] as any[]),
       ]);
       setProfile(prof);
       if (prof) {
@@ -67,7 +64,7 @@ export default function BuyerPage() {
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [buyerId]);
+  useEffect(() => { load(); }, []);
 
   async function saveProfile() {
     setSavingProfile(true);
@@ -78,7 +75,7 @@ export default function BuyerPage() {
         budgetMinLak: profileForm.budgetMin ? Number(profileForm.budgetMin) : undefined,
         budgetMaxLak: profileForm.budgetMax ? Number(profileForm.budgetMax) : undefined,
         notes: profileForm.notes || undefined,
-      }, buyerId);
+      });
       setProfile(saved);
       alert('✓ ບັນທຶກ Profile ສຳເລັດ — ລະບົບຈະ Auto-Match ທີ່ດິນໃຫ້ທ່ານ');
     } catch (e: any) {
@@ -89,7 +86,7 @@ export default function BuyerPage() {
   async function confirmViewingAttendance(viewingId: string) {
     setConfirmingId(viewingId);
     try {
-      await api.confirmViewing(viewingId, buyerId);
+      await api.confirmViewing(viewingId);
       await load();
     } catch (e: any) {
       alert(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');

@@ -11,8 +11,6 @@ import RequireRole from '../../../components/RequireRole';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useCurrency } from '../../../contexts/CurrencyContext';
 
-const DEMO_OWNER = '33333333-3333-3333-3333-333333333333';
-
 const STATUS_COLORS: Record<string, string> = {
   active:       'bg-green-100 text-green-700',
   draft:        'bg-gray-100 text-gray-500',
@@ -42,7 +40,6 @@ export default function OwnerPage() {
   const locale = useLocale();
   const { user } = useAuth();
   const { format } = useCurrency();
-  const ownerId = user?.id ?? DEMO_OWNER;
 
   const [tab, setTab] = useState<Tab>('properties');
   const [properties, setProperties] = useState<any[]>([]);
@@ -68,21 +65,21 @@ export default function OwnerPage() {
     setLoading(true);
     try {
       const [props, mands] = await Promise.all([
-        api.getOwnerProperties(ownerId).catch(() => [] as any[]),
-        api.getOwnerMandates(ownerId).catch(() => [] as any[]),
+        api.getOwnerProperties().catch(() => [] as any[]),
+        api.getOwnerMandates().catch(() => [] as any[]),
       ]);
       setProperties(props);
       setMandates(mands);
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [ownerId]);
+  useEffect(() => { load(); }, []);
 
   async function approveMandate(mandateId: string) {
     if (!confirm('ທ່ານຕ້ອງການອະນຸມັດ Mandate ນາຍໜ້ານີ້ບໍ?')) return;
     setApprovingId(mandateId);
     try {
-      await api.approveMandate(mandateId, ownerId);
+      await api.approveMandate(mandateId);
       await load();
     } catch (e: any) {
       alert(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
@@ -93,7 +90,7 @@ export default function OwnerPage() {
     if (!confirm('ທ່ານຕ້ອງການຍົກເລີກ Mandate ນີ້ບໍ?')) return;
     setRevokingId(mandateId);
     try {
-      await api.revokeOwnerMandate(mandateId, ownerId);
+      await api.revokeOwnerMandate(mandateId);
       await load();
     } catch (e: any) {
       alert(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
@@ -103,7 +100,7 @@ export default function OwnerPage() {
   async function sendOtp(propertyId: string) {
     setOtpSending(true); setOtpError('');
     try {
-      await api.requestOwnerOtp(propertyId, ownerId);
+      await api.requestOwnerOtp(propertyId);
       setOtpPropertyId(propertyId);
       setOtpSent(true);
     } catch (e: any) {
@@ -118,7 +115,7 @@ export default function OwnerPage() {
       await api.verifyOwnerOtp({
         propertyId: otpPropertyId, code: otpCode,
         ownerSetPrice: Number(otpPrice), priceCurrency: otpCurrency,
-      }, ownerId);
+      });
       setOtpPropertyId(null); setOtpCode(''); setOtpPrice(''); setOtpSent(false);
       await load();
     } catch (e: any) {

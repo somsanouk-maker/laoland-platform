@@ -24,7 +24,7 @@ export async function requestMandate(params: {
     const rows = await query(
       `INSERT INTO mandates (property_id, broker_id, mandate_type, status,
                              trackable_slug, commission_pct, is_exclusive)
-       VALUES ($1, $2, $3, 'active', $4, $5, $6)
+       VALUES ($1, $2, $3, 'requested', $4, $5, $6)
        RETURNING id, trackable_slug, mandate_type, status, is_exclusive`,
       [
         params.propertyId,
@@ -35,11 +35,6 @@ export async function requestMandate(params: {
         params.isExclusive ?? false,
       ],
     );
-
-    // ★ ຖ້າ exclusive → ໃຫ້ Green Badge ແກ່ທີ່ດິນ (ຜ່ານກວດໃບຕາ + Exclusive)
-    if (params.isExclusive) {
-      await query('UPDATE properties SET green_badge = true WHERE id = $1', [params.propertyId]);
-    }
     return rows[0];
   } catch (e: any) {
     // unique violation: ນາຍໜ້າຄົນນີ້ມີ mandate ແລ້ວ ຫຼື ມີ exclusive ຢູ່ແລ້ວ
@@ -60,6 +55,19 @@ export async function getBrokerMandates(brokerId: string) {
       ORDER BY m.created_at DESC`,
     [brokerId],
   );
+}
+
+// ນາຍໜ້າຖອນ mandate ຂອງຕົນເອງ (renounce) — broker-initiated withdrawal
+export async function renounceMandate(brokerId: string, mandateId: string) {
+  const rows = await query<{ id: string; property_id: string }>(
+    `UPDATE mandates
+        SET status = 'renounced', revoked_at = now()
+      WHERE id = $1 AND broker_id = $2 AND status IN ('requested', 'active')
+     RETURNING id, property_id`,
+    [mandateId, brokerId],
+  );
+  if (!rows.length) throw new AppError(403, 'ບໍ່ມີສິດ ຫຼື ສະຖານະບໍ່ຖືກຕ້ອງ');
+  return rows[0];
 }
 
 // ແປງ Trackable Link → ຫາ mandate/broker ປາຍທາງ (ໃຊ້ຕອນ buyer ກົດ link)

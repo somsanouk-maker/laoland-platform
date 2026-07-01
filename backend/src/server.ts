@@ -2,18 +2,19 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { pool } from './config/db.js';
 import { runMigrations } from './db/migrate.js';
+import { logger } from './services/logger.js';
 
 async function main() {
   await runMigrations();
 
   const app = createApp();
   const server = app.listen(env.port, () => {
-    console.log(`🏯 LaoLand API ກຳລັງເຮັດວຽກຢູ່ http://localhost:${env.port} (${env.nodeEnv})`);
+    logger.info('LaoLand API started', { port: env.port, env: env.nodeEnv });
   });
 
   // graceful shutdown — ປິດ pool ກ່ອນ exit
   async function shutdown() {
-    console.log('\nກຳລັງປິດ server...');
+    logger.info('Shutting down server');
     server.close();
     await pool.end();
     process.exit(0);
@@ -23,6 +24,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('Failed to start server:', err);
+  logger.error('Failed to start server', { err: String(err) });
   process.exit(1);
 });

@@ -8,8 +8,6 @@ import RequireRole from '../../../../components/RequireRole';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { useCurrency } from '../../../../contexts/CurrencyContext';
 
-const DEMO_BROKER = '11111111-1111-1111-1111-111111111111';
-
 const STAGES = ['inquiry', 'viewing', 'negotiation', 'deposit', 'closed', 'lost'] as const;
 type Stage = (typeof STAGES)[number];
 
@@ -28,7 +26,6 @@ export default function PipelinePage() {
   const locale = useLocale();
   const { user } = useAuth();
   const { format } = useCurrency();
-  const brokerId = user?.id ?? DEMO_BROKER;
 
   const [board, setBoard] = useState<Record<Stage, any[]> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,17 +39,17 @@ export default function PipelinePage() {
 
   async function loadBoard() {
     setLoading(true);
-    try { setBoard(await api.getPipelineBoard(brokerId)); }
+    try { setBoard(await api.getPipelineBoard()); }
     catch { setBoard(null); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { loadBoard(); }, [brokerId]);
+  useEffect(() => { loadBoard(); }, []);
 
   async function moveStage(dealId: string, stage: Stage) {
     setMoving(dealId);
     try {
-      await api.movePipelineStage(dealId, stage, brokerId);
+      await api.movePipelineStage(dealId, stage);
       await loadBoard();
     } finally { setMoving(null); }
   }
@@ -63,7 +60,7 @@ export default function PipelinePage() {
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
         navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 })
       );
-      await api.logViewing(dealId, { lat: pos.coords.latitude, lng: pos.coords.longitude }, brokerId);
+      await api.logViewing(dealId, { lat: pos.coords.latitude, lng: pos.coords.longitude });
       await loadBoard();
       alert('✓ ບັນທຶກ GPS Viewing ສຳເລັດ — Buyer ຖືກລັອກ 90 ມື້ໃຫ້ທ່ານ');
     } catch (e: any) {

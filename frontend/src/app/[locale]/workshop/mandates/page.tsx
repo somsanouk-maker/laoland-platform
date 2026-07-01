@@ -8,8 +8,6 @@ import RequireRole from '../../../../components/RequireRole';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { useCurrency } from '../../../../contexts/CurrencyContext';
 
-const DEMO_BROKER = '11111111-1111-1111-1111-111111111111';
-
 const STATUS_STYLE: Record<string, string> = {
   active:   'bg-green-100 text-green-700',
   revoked:  'bg-red-100 text-red-600',
@@ -24,8 +22,6 @@ export default function MandatesPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
 
-  const brokerId = user?.id ?? DEMO_BROKER;
-
   const [mandates, setMandates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -33,12 +29,12 @@ export default function MandatesPage() {
 
   async function load() {
     setLoading(true);
-    try { setMandates(await api.getMandates(brokerId)); }
+    try { setMandates(await api.getMandates()); }
     catch { setMandates([]); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [brokerId]);
+  useEffect(() => { load(); }, []);
 
   function copySlug(slug: string, id: string) {
     navigator.clipboard.writeText(`${window.location.origin}/${locale}/m/${slug}`);

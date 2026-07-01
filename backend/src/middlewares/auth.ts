@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { env } from '../config/env.js';
 import { AppError } from './errorHandler.js';
-import { query } from '../config/db.js';
 
-// ໂຄງສ້າງ user ໃນ request (ຫຼັງ auth)
 export interface AuthUser {
   id: string;
   role: 'buyer' | 'owner' | 'broker' | 'admin';
 }
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
@@ -16,23 +17,22 @@ declare global {
   }
 }
 
-// MVP: ໃຊ້ header X-User-Id ແທນ JWT ເຕັມຮູບແບບ (ປ່ຽນເປັນ JWT ໃນ production)
-// ໝາຍເຫດ: Showroom ສ່ວນຫຼາຍ public — middleware ນີ້ໃຊ້ສະເພາະ Workshop
 export async function authenticate(req: Request, _res: Response, next: NextFunction) {
-  const userId = req.header('X-User-Id');
-  if (!userId) return next(new AppError(401, 'ບໍ່ໄດ້ເຂົ້າສູ່ລະບົບ (missing X-User-Id)'));
+  const header = req.header('Authorization');
+  if (!header?.startsWith('Bearer ')) {
+    return next(new AppError(401, 'ຕ້ອງເຂົ້າສູ່ລະບົບ (missing Bearer token)'));
+  }
 
-  const rows = await query<{ id: string; role: AuthUser['role'] }>(
-    'SELECT id, role FROM users WHERE id = $1',
-    [userId],
-  );
-  if (!rows.length) return next(new AppError(401, 'ບໍ່ພົບຜູ້ໃຊ້'));
-
-  req.user = rows[0];
-  next();
+  const token = header.slice(7);
+  try {
+    const payload = jwt.verify(token, env.jwtSecret) as { sub: string; role: AuthUser['role'] };
+    req.user = { id: payload.sub, role: payload.role };
+    next();
+  } catch {
+    next(new AppError(401, 'Token ໝົດອາຍຸ ຫຼື ບໍ່ຖືກຕ້ອງ — ກະລຸນາ login ໃໝ່'));
+  }
 }
 
-// ຈຳກັດສິດຕາມ role (ເຊັ່ນ Workshop = broker ເທົ່ານັ້ນ)
 export function requireRole(...roles: AuthUser['role'][]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user || !roles.includes(req.user.role)) {

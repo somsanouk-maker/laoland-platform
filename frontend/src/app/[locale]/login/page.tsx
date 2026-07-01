@@ -2,60 +2,64 @@
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { Briefcase, Home, UserCircle, MessageCircle, ArrowRight, CheckCircle } from 'lucide-react';
-import { useAuth, UserRole } from '../../../contexts/AuthContext';
+import { MessageCircle, ArrowRight, CheckCircle } from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
 
-type Step = 'role' | 'phone' | 'otp' | 'done';
-
-const ROLES: { key: UserRole; icon: React.ReactNode; color: string }[] = [
-  { key: 'broker', icon: <Briefcase size={28} />, color: 'border-brand bg-brand/5 text-brand' },
-  { key: 'owner', icon: <Home size={28} />, color: 'border-amber-500 bg-amber-50 text-amber-600' },
-  { key: 'buyer', icon: <UserCircle size={28} />, color: 'border-blue-500 bg-blue-50 text-blue-600' },
-];
-
-// Mock OTP for demo — real implementation calls backend /api/owners/otp
-const DEMO_OTP = '123456';
+type Step = 'phone' | 'otp' | 'done';
 
 export default function LoginPage() {
   const t = useTranslations('login');
   const locale = useLocale();
   const router = useRouter();
-  const { login } = useAuth();
+  const { requestLoginOtp, verifyLoginOtp } = useAuth();
 
-  const [step, setStep] = useState<Step>('role');
-  const [role, setRole] = useState<UserRole>(null);
+  const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
-  const [name, setName] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
-  function pickRole(r: UserRole) {
-    setRole(r);
-    setStep('phone');
+  // Full E.164: +856 + user input
+  function fullPhone() {
+    const digits = phone.replace(/\D/g, '');
+    return `+856${digits}`;
   }
 
   async function sendOtp() {
     if (!phone.trim()) { setError(t('errorPhone')); return; }
     setSending(true);
     setError('');
-    // MVP: simulate sending — in prod call POST /api/owners/otp
-    await new Promise((r) => setTimeout(r, 800));
-    setSending(false);
-    setStep('otp');
+    try {
+      await requestLoginOtp(fullPhone());
+      setStep('otp');
+    } catch (e: any) {
+      setError(e.message ?? t('errorPhone'));
+    } finally {
+      setSending(false);
+    }
   }
 
-  function verifyOtp() {
+  async function verifyOtpCode() {
+    if (otp.length < 6) return;
+    setVerifying(true);
     setError('');
-    if (otp !== DEMO_OTP) { setError(t('errorOtp')); return; }
-    login(phone, role, name || `User ${phone.slice(-4)}`);
-    setStep('done');
-    setTimeout(() => {
-      const dest = role === 'broker' ? `/${locale}/workshop` :
-                   role === 'owner'  ? `/${locale}/owner` :
-                                       `/${locale}/buyer`;
-      router.push(dest);
-    }, 1000);
+    try {
+      const user = await verifyLoginOtp(fullPhone(), otp);
+      setStep('done');
+      setTimeout(() => {
+        const dest =
+          user.role === 'broker' ? `/${locale}/workshop` :
+          user.role === 'owner'  ? `/${locale}/owner` :
+          user.role === 'admin'  ? `/${locale}/admin` :
+                                   `/${locale}/buyer`;
+        router.push(dest);
+      }, 800);
+    } catch (e: any) {
+      setError(e.message ?? t('errorOtp'));
+    } finally {
+      setVerifying(false);
+    }
   }
 
   return (
@@ -69,46 +73,12 @@ export default function LoginPage() {
 
         <div className="bg-white border rounded-2xl p-6 shadow-sm">
 
-          {/* Step 1: Choose role */}
-          {step === 'role' && (
-            <div>
-              <h2 className="text-lg font-bold mb-1">{t('chooseRole')}</h2>
-              <p className="text-sm text-gray-500 mb-5">{t('chooseRoleHint')}</p>
-              <div className="space-y-3">
-                {ROLES.map(({ key, icon, color }) => (
-                  <button
-                    key={key}
-                    onClick={() => pickRole(key)}
-                    className={`w-full flex items-center gap-4 border-2 rounded-xl p-4 text-left hover:shadow-sm transition-all ${color}`}
-                  >
-                    <div className="shrink-0">{icon}</div>
-                    <div>
-                      <div className="font-bold text-base">{t(`role_${key}`)}</div>
-                      <div className="text-sm opacity-70">{t(`role_${key}_desc`)}</div>
-                    </div>
-                    <ArrowRight size={16} className="ml-auto opacity-50" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Phone + Name */}
+          {/* Step 1: Phone */}
           {step === 'phone' && (
             <div>
-              <button onClick={() => setStep('role')} className="text-sm text-gray-400 hover:text-brand mb-4 block">← {t('back')}</button>
               <h2 className="text-lg font-bold mb-1">{t('enterPhone')}</h2>
               <p className="text-sm text-gray-500 mb-5">{t('enterPhoneHint')}</p>
               <div className="space-y-3">
-                <label className="block text-sm font-medium">
-                  {t('name')}
-                  <input
-                    className="border rounded-xl px-4 py-3 w-full mt-1 text-base"
-                    placeholder={t('namePlaceholder')}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </label>
                 <label className="block text-sm font-medium">
                   {t('phone')}
                   <div className="flex gap-2 mt-1">
@@ -119,13 +89,14 @@ export default function LoginPage() {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       type="tel"
+                      autoComplete="tel"
                     />
                   </div>
                 </label>
                 {error && <p className="text-red-500 text-sm">{error}</p>}
                 <button
                   onClick={sendOtp}
-                  disabled={sending}
+                  disabled={sending || !phone.trim()}
                   className="w-full bg-brand text-white rounded-xl py-3 font-bold flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   <MessageCircle size={18} />
@@ -136,14 +107,16 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Step 3: OTP */}
+          {/* Step 2: OTP */}
           {step === 'otp' && (
             <div>
-              <button onClick={() => setStep('phone')} className="text-sm text-gray-400 hover:text-brand mb-4 block">← {t('back')}</button>
+              <button onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
+                className="text-sm text-gray-400 hover:text-brand mb-4 block">
+                ← {t('back')}
+              </button>
               <h2 className="text-lg font-bold mb-1">{t('enterOtp')}</h2>
               <p className="text-sm text-gray-500 mb-5">
                 {t('otpSentTo')} <strong>+856 {phone}</strong>
-                <br /><span className="text-xs text-gray-400">(Demo OTP: <strong>123456</strong>)</span>
               </p>
               <input
                 className="border-2 rounded-xl px-4 py-4 w-full text-center text-2xl font-mono tracking-widest focus:border-brand outline-none"
@@ -151,14 +124,16 @@ export default function LoginPage() {
                 maxLength={6}
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                autoComplete="one-time-code"
+                inputMode="numeric"
               />
               {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
               <button
-                onClick={verifyOtp}
-                disabled={otp.length < 6}
+                onClick={verifyOtpCode}
+                disabled={otp.length < 6 || verifying}
                 className="w-full bg-brand text-white rounded-xl py-3 font-bold mt-4 disabled:opacity-60"
               >
-                {t('verify')}
+                {verifying ? '...' : t('verify')}
               </button>
             </div>
           )}

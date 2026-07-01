@@ -19,9 +19,9 @@ CREATE TYPE land_type         AS ENUM ('residential', 'agricultural', 'industria
 CREATE TYPE deed_type         AS ENUM ('titled', 'survey', 'tax_receipt', 'white_paper');
 CREATE TYPE property_status    AS ENUM ('draft', 'pending_owner', 'active', 'sold', 'archived');
 CREATE TYPE mandate_type       AS ENUM ('exclusive', 'open');
-CREATE TYPE mandate_status     AS ENUM ('requested', 'active', 'revoked', 'expired');
+CREATE TYPE mandate_status     AS ENUM ('requested', 'active', 'revoked', 'renounced', 'expired');
 CREATE TYPE otp_channel        AS ENUM ('whatsapp', 'sms');
-CREATE TYPE otp_purpose        AS ENUM ('activate_listing', 'confirm_price', 'revoke_broker');
+CREATE TYPE otp_purpose        AS ENUM ('activate_listing', 'confirm_price', 'revoke_broker', 'login');
 CREATE TYPE referral_status    AS ENUM ('active', 'expired', 'converted');
 CREATE TYPE cobroke_status     AS ENUM ('proposed', 'accepted', 'rejected', 'closed');
 CREATE TYPE pipeline_stage     AS ENUM ('inquiry', 'viewing', 'negotiation', 'deposit', 'closed', 'lost');
@@ -52,6 +52,7 @@ CREATE TABLE users (
   -- ສະເພາະ broker
   broker_license_no  text,
   is_founding_broker boolean     NOT NULL DEFAULT false,  -- ນາຍໜ້າຜູ້ກໍ່ຕັ້ງ (Founding Cohort)
+  is_active          boolean     NOT NULL DEFAULT true,   -- soft-delete flag (admin can deactivate)
   created_at         timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now()
 );
@@ -256,7 +257,30 @@ CREATE TRIGGER trg_pipeline_updated BEFORE UPDATE ON sales_pipeline
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- =====================================================================
--- 9) fx_rates + currency_quotes — Currency-Locked Quotes
+-- 9) viewing_logs — ບັນທຶກການເຂົ້າເບິ່ງທີ່ດິນ + First-Referral Protection Window
+--    ★ lock_expires_at = created_at + 90 days (ປ້ອງກັນ buyer ຂ້າມນາຍໜ້າ)
+-- =====================================================================
+CREATE TABLE viewing_logs (
+  id                 uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  deal_id            uuid NOT NULL REFERENCES sales_pipeline(id) ON DELETE CASCADE,
+  property_id        uuid NOT NULL REFERENCES properties(id),
+  broker_id          uuid NOT NULL REFERENCES users(id),
+  buyer_id           uuid REFERENCES users(id),
+  lat                numeric(10,7),
+  lng                numeric(10,7),
+  notes              text,
+  -- ★ lock_expires_at ຕົກລົງ 90 ມື້ນັບຈາກວັນ viewing (Referral Protection Window)
+  lock_expires_at    timestamptz NOT NULL DEFAULT (now() + interval '90 days'),
+  buyer_confirmed    boolean NOT NULL DEFAULT false,
+  buyer_confirmed_at timestamptz,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_viewing_logs_deal   ON viewing_logs (deal_id);
+CREATE INDEX idx_viewing_logs_broker ON viewing_logs (broker_id);
+CREATE INDEX idx_viewing_logs_buyer  ON viewing_logs (buyer_id);
+
+-- =====================================================================
+-- 11) fx_rates + currency_quotes — Currency-Locked Quotes
 -- =====================================================================
 CREATE TABLE fx_rates (
   id        uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -284,7 +308,7 @@ CREATE TABLE currency_quotes (
 CREATE INDEX idx_quotes_property ON currency_quotes (property_id);
 
 -- =====================================================================
--- 10) audit_log — ບັນທຶກເຫດການສຳຄັນ (immutable, append-only)
+-- 12) audit_log — ບັນທຶກເຫດການສຳຄັນ (immutable, append-only)
 -- =====================================================================
 CREATE TABLE audit_log (
   id          bigserial PRIMARY KEY,
@@ -298,7 +322,7 @@ CREATE TABLE audit_log (
 CREATE INDEX idx_audit_entity ON audit_log (entity, entity_id);
 
 -- =====================================================================
--- 11) saved_properties — Buyer ບັນທຶກທີ່ດິນ + ເລືອກນາຍໜ້າ
+-- 13) saved_properties — Buyer ບັນທຶກທີ່ດິນ + ເລືອກນາຍໜ້າ
 -- =====================================================================
 CREATE TABLE saved_properties (
   id           uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -311,7 +335,7 @@ CREATE TABLE saved_properties (
 CREATE INDEX idx_saved_buyer ON saved_properties (buyer_id);
 
 -- =====================================================================
--- 12) buyer_profiles — Buyer ຕັ້ງຄ່າຄວາມຕ້ອງການ
+-- 14) buyer_profiles — Buyer ຕັ້ງຄ່າຄວາມຕ້ອງການ
 -- =====================================================================
 CREATE TABLE buyer_profiles (
   buyer_id              uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -322,4 +346,13 @@ CREATE TABLE buyer_profiles (
   budget_max_lak        numeric(16,2),
   notes                 text,
   updated_at            timestamptz NOT NULL DEFAULT now()
+);
+
+-- =====================================================================
+-- 15) schema_migrations — Additive migration tracker
+-- =====================================================================
+CREATE TABLE schema_migrations (
+  id         serial PRIMARY KEY,
+  filename   text NOT NULL UNIQUE,
+  applied_at timestamptz NOT NULL DEFAULT now()
 );

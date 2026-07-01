@@ -8,8 +8,6 @@ import RequireRole from '../../../../components/RequireRole';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { useCurrency } from '../../../../contexts/CurrencyContext';
 
-const DEMO_BROKER = '11111111-1111-1111-1111-111111111111';
-
 const STATUS_META: Record<string, { icon: React.ReactNode; style: string }> = {
   proposed: { icon: <Clock size={13} />,        style: 'bg-yellow-100 text-yellow-700' },
   accepted: { icon: <CheckCircle2 size={13} />, style: 'bg-green-100 text-green-700' },
@@ -23,8 +21,6 @@ export default function CobrokePage() {
   const locale = useLocale();
   const { user } = useAuth();
   const { format } = useCurrency();
-
-  const brokerId = user?.id ?? DEMO_BROKER;
 
   const [cobrokes, setCobrokes] = useState<any[]>([]);
   const [mandates, setMandates] = useState<any[]>([]);
@@ -44,9 +40,9 @@ export default function CobrokePage() {
     setLoading(true);
     try {
       const [cb, ma, br] = await Promise.all([
-        api.getCobrokes(brokerId),
-        api.getMandates(brokerId),
-        api.getBrokers(brokerId),
+        api.getCobrokes(),
+        api.getMandates(),
+        api.getBrokers(),
       ]);
       setCobrokes(cb);
       setMandates(ma);
@@ -55,7 +51,7 @@ export default function CobrokePage() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [brokerId]);
+  useEffect(() => { load(); }, []);
 
   async function propose() {
     setProposing(true); setProposeError('');
@@ -70,7 +66,7 @@ export default function CobrokePage() {
         cobrokeBrokerId: proposeForm.cobrokeBrokerId,
         splitListingPct: sl,
         splitCobrokePct: sc,
-      }, brokerId);
+      });
       setShowPropose(false);
       setProposeForm({ propertyId: '', cobrokeBrokerId: '', splitListingPct: '50', splitCobrokePct: '50' });
       await load();
@@ -81,7 +77,7 @@ export default function CobrokePage() {
 
   async function accept(id: string) {
     setAccepting(id);
-    try { await api.acceptCobroke(id, brokerId); await load(); }
+    try { await api.acceptCobroke(id); await load(); }
     catch { }
     finally { setAccepting(null); }
   }

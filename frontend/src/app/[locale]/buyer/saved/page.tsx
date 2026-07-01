@@ -7,8 +7,6 @@ import { api } from '../../../../lib/api';
 import { useAuth } from '../../../../contexts/AuthContext';
 import RequireRole from '../../../../components/RequireRole';
 
-const DEMO_BUYER = '44444444-4444-4444-4444-444444444444';
-
 const LAND_TYPE_LAO: Record<string, string> = {
   residential: 'ທີ່ດິນປຸກສ້າງ',
   agricultural: 'ທີ່ດິນກະສິກຳ',
@@ -19,7 +17,6 @@ const LAND_TYPE_LAO: Record<string, string> = {
 export default function SavedPage() {
   const locale = useLocale();
   const { user } = useAuth();
-  const buyerId = user?.id ?? DEMO_BUYER;
 
   const [saved, setSaved] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,17 +24,17 @@ export default function SavedPage() {
 
   async function load() {
     setLoading(true);
-    try { setSaved(await api.getSavedProperties(buyerId)); }
+    try { setSaved(await api.getSavedProperties()); }
     catch { setSaved([]); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [buyerId]);
+  useEffect(() => { load(); }, []);
 
   async function remove(propertyId: string) {
     setRemovingId(propertyId);
     try {
-      await api.unsaveProperty(propertyId, buyerId);
+      await api.unsaveProperty(propertyId);
       setSaved((prev) => prev.filter((s) => s.id !== propertyId));
     } finally { setRemovingId(null); }
   }

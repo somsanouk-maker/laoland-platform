@@ -13,7 +13,6 @@ import RequireRole from '../../../components/RequireRole';
 
 const LocationPicker = dynamic(() => import('../../../components/LocationPicker'), { ssr: false });
 
-const DEMO_BROKER = '11111111-1111-1111-1111-111111111111';
 type FlowStep = 'dedup' | 'create' | 'done';
 
 export default function WorkshopPage() {
@@ -21,14 +20,13 @@ export default function WorkshopPage() {
   const tl = useTranslations('landType');
   const locale = useLocale();
   const { user } = useAuth();
-  const brokerId = user?.id ?? DEMO_BROKER;
 
   // Live stats
   const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
-    api.getPipelineStats(brokerId).then(setStats).catch(() => {});
-  }, [brokerId]);
+    api.getPipelineStats().then(setStats).catch(() => {});
+  }, []);
 
   // Property registration flow
   const [step, setStep] = useState<FlowStep>('dedup');
@@ -50,7 +48,7 @@ export default function WorkshopPage() {
   async function checkDup() {
     setChecking(true); setDupResult(null); setError('');
     try {
-      const r = await api.checkDuplicate({ titleDeedNo: deedNo || null, lat: Number(lat), lng: Number(lng) }, brokerId);
+      const r = await api.checkDuplicate({ titleDeedNo: deedNo || null, lat: Number(lat), lng: Number(lng) });
       setDupResult(r);
       if (!r.isDuplicate) setStep('create');
     } catch (e: any) { setError(e.message); }
@@ -70,7 +68,7 @@ export default function WorkshopPage() {
         areaSqm: form.areaSqm ? Number(form.areaSqm) : undefined,
         ownerSetPrice: form.ownerSetPrice ? Number(form.ownerSetPrice) : undefined,
         priceCurrency: form.priceCurrency,
-      }, brokerId);
+      });
 
       // Auto-request mandate after property creation
       const propId = result.id ?? result.propertyId;
@@ -79,13 +77,13 @@ export default function WorkshopPage() {
           propertyId: propId,
           mandateType: 'open',
           commissionPct: Number(form.commissionPct),
-        }, brokerId);
+        });
       } catch { /* mandate request optional — continue */ }
 
       setCreated(result);
       setStep('done');
       // Refresh stats
-      api.getPipelineStats(brokerId).then(setStats).catch(() => {});
+      api.getPipelineStats().then(setStats).catch(() => {});
     } catch (e: any) { setError(e.data?.error ?? e.message ?? t('createError')); }
     finally { setCreating(false); }
   }

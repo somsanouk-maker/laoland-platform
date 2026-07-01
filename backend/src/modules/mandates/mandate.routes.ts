@@ -23,6 +23,10 @@ router.get('/brokers', asyncH(ctrl.listBrokers));
 router.get('/cobroke', asyncH(ctrl.listCobrokes));
 router.post('/cobroke', asyncH(ctrl.proposeCoBroke));
 router.post('/cobroke/:id/accept', asyncH(ctrl.acceptCoBroke));
+router.post('/cobroke/:id/reject', asyncH(ctrl.rejectCoBroke));
 router.get('/cobroke/:id/buyer', asyncH(ctrl.getBuyer)); // ★ ສົ່ງຄືນ buyer ແບບ masked
+
+// Broker renounces their own mandate
+router.patch('/:id/renounce', asyncH(ctrl.renounceMandate));
 
 export default router;

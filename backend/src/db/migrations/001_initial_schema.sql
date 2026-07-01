@@ -1,0 +1,3 @@
+-- Migration 001: Initial schema
+-- Applied automatically on fresh installs via schema.sql + seed.sql.
+-- This file is a marker only — no SQL to run.
