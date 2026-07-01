@@ -86,4 +86,15 @@ export const api = {
     request<any[]>(`/api/buyers/viewings`),
   confirmViewing: (viewingLogId: string) =>
     request<any>(`/api/buyers/viewings/${viewingLogId}/confirm`, { method: 'POST' }),
+  // Admin
+  adminGetUsers: () => request<any[]>(`/api/admin/users`),
+  adminDeactivateUser: (id: string) => request<any>(`/api/admin/users/${id}/deactivate`, { method: 'PATCH' }),
+  adminActivateUser: (id: string) => request<any>(`/api/admin/users/${id}/activate`, { method: 'PATCH' }),
+  adminGetProperties: (offset = 0) => request<any[]>(`/api/admin/properties?limit=50&offset=${offset}`),
+  adminGetMandates: (offset = 0) => request<any[]>(`/api/admin/mandates?limit=50&offset=${offset}`),
+  adminGetAuditLog: (offset = 0) => request<any[]>(`/api/admin/audit-log?limit=50&offset=${offset}`),
+  editProperty: (id: string, body: any) =>
+    request<any>(`/api/properties/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  markPropertySold: (id: string) => request<any>(`/api/properties/${id}/sold`, { method: 'POST' }),
+  archiveProperty: (id: string) => request<any>(`/api/properties/${id}/archive`, { method: 'POST' }),
 };

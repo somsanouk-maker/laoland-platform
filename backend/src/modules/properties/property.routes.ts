@@ -75,14 +75,19 @@ router.post('/:id/inquire', asyncH(async (req: Request, res: Response) => {
   });
 }));
 
-// Workshop (broker): ກວດຊໍ້າ + ສ້າງທີ່ດິນ + ຈັດການຮູບ
+// Workshop (broker): ກວດຊໍ້າ + ສ້າງທີ່ດິນ + ຈັດການ
 router.post('/check-duplicate', authenticate, requireRole('broker', 'admin'), asyncH(ctrl.checkDuplicate));
 router.post('/', authenticate, requireRole('broker', 'admin'), asyncH(ctrl.create));
+router.patch('/:id', authenticate, requireRole('broker', 'admin'), asyncH(ctrl.editProperty));
+router.post('/:id/sold', authenticate, requireRole('broker', 'admin'), asyncH(ctrl.markSold));
+router.post('/:id/archive', authenticate, requireRole('broker', 'admin'), asyncH(ctrl.archiveProperty));
 
 // ★ Image pipeline (De-dup ກົດທີ 3)
 router.post('/images/hash', authenticate, requireRole('broker', 'admin'),
   upload.array('images', 10), asyncH(ctrl.hashImages));
 router.post('/:id/images', authenticate, requireRole('broker', 'admin'),
   upload.array('images', 10), asyncH(ctrl.uploadImages));
+router.delete('/:id/images/:imageId', authenticate, requireRole('broker', 'admin'),
+  asyncH(ctrl.deleteImage));
 
 export default router;

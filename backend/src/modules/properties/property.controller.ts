@@ -96,3 +96,38 @@ export async function uploadImages(req: Request, res: Response) {
   const saved = await images.attachImages(req.params.id, files, { isDrone });
   res.status(201).json(saved);
 }
+
+// DELETE /api/properties/:id/images/:imageId
+export async function deleteImage(req: Request, res: Response) {
+  await images.deleteImage(req.params.imageId, req.params.id);
+  res.json({ deleted: true });
+}
+
+// PATCH /api/properties/:id — edit non-locked fields; admin can also change price
+export async function editProperty(req: Request, res: Response) {
+  const schema = z.object({
+    province: z.string().min(1).optional(),
+    district: z.string().min(1).optional(),
+    village: z.string().optional(),
+    addressText: z.string().optional(),
+    landType: z.enum(['residential', 'agricultural', 'industrial', 'commercial']).optional(),
+    deedType: z.enum(['titled', 'survey', 'tax_receipt', 'white_paper']).optional(),
+    areaSqm: z.number().positive().optional(),
+    ownerSetPrice: z.number().nonnegative().optional(),
+    priceCurrency: z.enum(['LAK', 'USD', 'THB']).optional(),
+    priceChangeReason: z.string().optional(),
+  });
+  const p = schema.safeParse(req.body);
+  if (!p.success) throw new AppError(400, 'ຂໍ້ມູນບໍ່ຖືກຕ້ອງ', p.error.flatten());
+  res.json(await svc.editProperty(req.params.id, req.user!.id, req.user!.role, p.data));
+}
+
+// POST /api/properties/:id/sold
+export async function markSold(req: Request, res: Response) {
+  res.json(await svc.markSold(req.params.id, req.user!.id, req.user!.role));
+}
+
+// POST /api/properties/:id/archive
+export async function archiveProperty(req: Request, res: Response) {
+  res.json(await svc.archiveProperty(req.params.id, req.user!.id, req.user!.role));
+}

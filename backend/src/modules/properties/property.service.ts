@@ -123,6 +123,10 @@ export async function createProperty(input: CreatePropertyInput) {
         input.createdBy,
       ],
     );
+    await client.query(
+      `INSERT INTO audit_log (actor_id, action, entity, entity_id) VALUES ($1, 'property_create', 'property', $2)`,
+      [input.createdBy, rows[0].id],
+    );
     return rows[0];
   });
 }
@@ -195,6 +199,143 @@ export async function syncGreenBadge(propertyId: string): Promise<void> {
       WHERE id = $1`,
     [propertyId],
   );
+}
+
+// ============================================================
+// Property lifecycle management
+// ============================================================
+
+export interface EditPropertyInput {
+  province?: string;
+  district?: string;
+  village?: string;
+  addressText?: string;
+  landType?: string;
+  deedType?: string;
+  areaSqm?: number;
+  // Admin-only:
+  ownerSetPrice?: number;
+  priceCurrency?: string;
+  priceChangeReason?: string;
+}
+
+// PATCH /api/properties/:id — edit non-locked fields
+// Broker: must have created the property OR hold an active mandate
+// Admin: unrestricted + can change price (with reason)
+export async function editProperty(
+  propertyId: string,
+  actorId: string,
+  actorRole: string,
+  input: EditPropertyInput,
+): Promise<unknown> {
+  return withTransaction(async (client) => {
+    // Access check
+    if (actorRole !== 'admin') {
+      const { rows: access } = await client.query(
+        `SELECT 1 FROM properties p
+          WHERE p.id = $1 AND (
+            p.created_by = $2 OR
+            EXISTS (SELECT 1 FROM mandates m WHERE m.property_id = p.id AND m.broker_id = $2 AND m.status = 'active')
+          )`,
+        [propertyId, actorId],
+      );
+      if (!access.length) throw new AppError(403, 'ບໍ່ມີສິດແກ້ໄຂທີ່ດິນນີ້');
+    }
+
+    const sets: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+
+    const editable: Record<string, string> = {
+      province: 'province',
+      district: 'district',
+      village: 'village',
+      addressText: 'address_text',
+      landType: 'land_type',
+      deedType: 'deed_type',
+      areaSqm: 'area_sqm',
+    };
+    for (const [k, col] of Object.entries(editable)) {
+      if ((input as any)[k] !== undefined) {
+        sets.push(`${col} = $${i++}`);
+        vals.push((input as any)[k]);
+      }
+    }
+
+    // Price change — admin only
+    if (input.ownerSetPrice !== undefined) {
+      if (actorRole !== 'admin') throw new AppError(403, 'ສະເພາະ Admin ສາມາດປ່ຽນລາຄາໄດ້');
+      if (!input.priceChangeReason?.trim()) throw new AppError(400, 'ຕ້ອງລະບຸເຫດຜົນໃນການປ່ຽນລາຄາ');
+      sets.push(`owner_set_price = $${i++}`);
+      vals.push(input.ownerSetPrice);
+      if (input.priceCurrency) { sets.push(`price_currency = $${i++}`); vals.push(input.priceCurrency); }
+    }
+
+    if (!sets.length) throw new AppError(400, 'ບໍ່ມີຂໍ້ມູນທີ່ຈະແກ້ໄຂ');
+
+    vals.push(propertyId);
+    const { rows } = await client.query(
+      `UPDATE properties SET ${sets.join(', ')} WHERE id = $${i} RETURNING id, status, province, district`,
+      vals,
+    );
+    if (!rows.length) throw new AppError(404, 'ບໍ່ພົບທີ່ດິນ');
+
+    const meta: Record<string, unknown> = { changes: input };
+    if (input.priceChangeReason) meta.reason = input.priceChangeReason;
+
+    await client.query(
+      `INSERT INTO audit_log (actor_id, action, entity, entity_id, meta)
+       VALUES ($1, 'property_edit', 'property', $2, $3)`,
+      [actorId, propertyId, JSON.stringify(meta)],
+    );
+    return rows[0];
+  });
+}
+
+// POST /api/properties/:id/sold — mark property as sold
+export async function markSold(propertyId: string, actorId: string, actorRole: string): Promise<unknown> {
+  return withTransaction(async (client) => {
+    if (actorRole !== 'admin') {
+      const { rows: access } = await client.query(
+        `SELECT 1 FROM mandates WHERE property_id = $1 AND broker_id = $2 AND status = 'active'`,
+        [propertyId, actorId],
+      );
+      if (!access.length) throw new AppError(403, 'ສະເພາະ Admin ຫຼື ນາຍໜ້າທີ່ມີ active mandate ສາມາດທຳຄືນໄດ້');
+    }
+    const { rows } = await client.query(
+      `UPDATE properties SET status = 'sold' WHERE id = $1 AND status = 'active' RETURNING id`,
+      [propertyId],
+    );
+    if (!rows.length) throw new AppError(409, 'ທີ່ດິນຕ້ອງຢູ່ໃນ status active ຈຶ່ງຈະ mark sold ໄດ້');
+    await client.query(
+      `INSERT INTO audit_log (actor_id, action, entity, entity_id) VALUES ($1, 'property_sold', 'property', $2)`,
+      [actorId, propertyId],
+    );
+    return { sold: true };
+  });
+}
+
+// POST /api/properties/:id/archive
+export async function archiveProperty(propertyId: string, actorId: string, actorRole: string): Promise<unknown> {
+  return withTransaction(async (client) => {
+    if (actorRole !== 'admin') {
+      const { rows: access } = await client.query(
+        `SELECT 1 FROM properties WHERE id = $1 AND created_by = $2`,
+        [propertyId, actorId],
+      );
+      if (!access.length) throw new AppError(403, 'ສະເພາະ Admin ຫຼື ນາຍໜ້າທີ່ສ້າງທີ່ດິນສາມາດ archive ໄດ້');
+    }
+    const { rows } = await client.query(
+      `UPDATE properties SET status = 'archived' WHERE id = $1 AND status NOT IN ('sold', 'archived') RETURNING id`,
+      [propertyId],
+    );
+    if (!rows.length) throw new AppError(409, 'ທີ່ດິນ sold ຫຼື archived ແລ້ວ ບໍ່ສາມາດ archive ໄດ້ອີກ');
+    await client.query(
+      `INSERT INTO audit_log (actor_id, action, entity, entity_id) VALUES ($1, 'property_archived', 'property', $2)`,
+      [actorId, propertyId],
+    );
+    return { archived: true };
+  });
 }
 
 // ດຶງລາຍລະອຽດທີ່ດິນ (Showroom) — ສົ່ງ lat/lng ກັບໄປໃຫ້ frontend ສະແດງແຜນທີ່

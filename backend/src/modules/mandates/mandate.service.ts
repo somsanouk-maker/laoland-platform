@@ -35,6 +35,10 @@ export async function requestMandate(params: {
         params.isExclusive ?? false,
       ],
     );
+    await query(
+      `INSERT INTO audit_log (actor_id, action, entity, entity_id, meta) VALUES ($1, 'mandate_request', 'mandate', $2, $3)`,
+      [params.brokerId, rows[0].id, JSON.stringify({ propertyId: params.propertyId, isExclusive: params.isExclusive ?? false })],
+    );
     return rows[0];
   } catch (e: any) {
     // unique violation: ນາຍໜ້າຄົນນີ້ມີ mandate ແລ້ວ ຫຼື ມີ exclusive ຢູ່ແລ້ວ
@@ -67,6 +71,10 @@ export async function renounceMandate(brokerId: string, mandateId: string) {
     [mandateId, brokerId],
   );
   if (!rows.length) throw new AppError(403, 'ບໍ່ມີສິດ ຫຼື ສະຖານະບໍ່ຖືກຕ້ອງ');
+  await query(
+    `INSERT INTO audit_log (actor_id, action, entity, entity_id) VALUES ($1, 'mandate_renounce', 'mandate', $2)`,
+    [brokerId, rows[0].id],
+  );
   return rows[0];
 }
 

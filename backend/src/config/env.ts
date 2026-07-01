@@ -39,4 +39,13 @@ export const env = {
   quote: {
     ttlHours: num('QUOTE_TTL_HOURS', 24),
   },
+  storage: {
+    provider: (process.env.STORAGE_PROVIDER ?? 'local') as 'local' | 'r2',
+    r2AccountId: process.env.R2_ACCOUNT_ID ?? '',
+    r2AccessKeyId: process.env.R2_ACCESS_KEY_ID ?? '',
+    r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '',
+    r2BucketName: process.env.R2_BUCKET_NAME ?? '',
+    // Public domain for R2 (e.g. images.laoland.la or the R2 public bucket URL)
+    r2PublicDomain: process.env.R2_PUBLIC_DOMAIN ?? '',
+  },
 } as const;

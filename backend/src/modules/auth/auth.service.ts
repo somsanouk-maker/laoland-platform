@@ -78,6 +78,11 @@ export async function verifyLoginOtp(phone: string, code: string) {
       { expiresIn: `${env.jwtTtlDays}d` },
     );
 
+    await client.query(
+      `INSERT INTO audit_log (actor_id, action, entity, entity_id) VALUES ($1, 'login', 'user', $1)`,
+      [user.id],
+    );
+
     return { token, user: { id: user.id, role: user.role, name: user.full_name } };
   });
 }

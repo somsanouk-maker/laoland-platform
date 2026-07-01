@@ -15,6 +15,7 @@ import mandateRoutes from './modules/mandates/mandate.routes.js';
 import pipelineRoutes from './modules/pipeline/pipeline.routes.js';
 import monetizationRoutes from './modules/monetization/monetization.routes.js';
 import buyerRoutes from './modules/buyers/buyer.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
 
 // Rate limiters
 const generalLimiter = rateLimit({
@@ -77,6 +78,7 @@ export function createApp() {
   app.use('/api/pipeline', pipelineRoutes);         // CRM pipeline
   app.use('/api/monetization', monetizationRoutes); // Currency-Lock + Foreign Wizard
   app.use('/api/buyers', buyerRoutes);              // Buyer profile + viewing history
+  app.use('/api/admin', adminRoutes);               // Admin portal
 
   // error handler ກາງ (ຕ້ອງຢູ່ສຸດທ້າຍ)
   app.use(errorHandler);
