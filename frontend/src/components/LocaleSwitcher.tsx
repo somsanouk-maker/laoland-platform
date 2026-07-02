@@ -1,8 +1,7 @@
 'use client';
 import { useLocale } from 'next-intl';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter } from '../i18n/navigation';
 
-// ສະຫຼັບພາສາ ລາວ/ອັງກິດ/ຈີນ (ປ່ຽນ prefix ໃນ URL)
 const LOCALES = [
   { code: 'lo', label: 'ລາວ' },
   { code: 'en', label: 'EN' },
@@ -15,10 +14,7 @@ export default function LocaleSwitcher() {
   const router = useRouter();
 
   function switchTo(code: string) {
-    // ປ່ຽນ segment ທຳອິດ (/lo/... → /en/...)
-    const segments = pathname.split('/');
-    segments[1] = code;
-    router.push(segments.join('/') || '/');
+    router.replace(pathname, { locale: code });
   }
 
   return (
