@@ -48,7 +48,7 @@ export default function WizardPage() {
   function reset() { setStep('nationality'); setAnswers({}); setResult(null); setError(null); }
 
   const Btn = ({ onClick, children }: any) => (
-    <button onClick={onClick} className="border rounded-lg px-4 py-3 hover:border-brand hover:bg-brand/5 text-left">
+    <button onClick={onClick} className="border rounded-xl px-4 py-3 hover:border-brand hover:bg-brand/5 text-left transition-colors">
       {children}
     </button>
   );

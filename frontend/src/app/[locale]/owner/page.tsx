@@ -23,6 +23,7 @@ const MANDATE_STATUS: Record<string, string> = {
   requested: 'bg-yellow-100 text-yellow-700',
   active:    'bg-green-100 text-green-700',
   revoked:   'bg-red-100 text-red-600',
+  renounced: 'bg-orange-100 text-orange-700',
   expired:   'bg-gray-100 text-gray-500',
 };
 
@@ -47,6 +48,9 @@ export default function OwnerPage() {
   const [loading, setLoading] = useState(true);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [confirmApproveId, setConfirmApproveId] = useState<string | null>(null);
+  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
 
   // OTP flow for property activation
   const [otpPropertyId, setOtpPropertyId] = useState<string | null>(null);
@@ -76,24 +80,26 @@ export default function OwnerPage() {
   useEffect(() => { load(); }, []);
 
   async function approveMandate(mandateId: string) {
-    if (!confirm('ທ່ານຕ້ອງການອະນຸມັດ Mandate ນາຍໜ້ານີ້ບໍ?')) return;
     setApprovingId(mandateId);
+    setActionError('');
     try {
       await api.approveMandate(mandateId);
+      setConfirmApproveId(null);
       await load();
     } catch (e: any) {
-      alert(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
+      setActionError(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
     } finally { setApprovingId(null); }
   }
 
   async function revokeMandate(mandateId: string) {
-    if (!confirm('ທ່ານຕ້ອງການຍົກເລີກ Mandate ນີ້ບໍ?')) return;
     setRevokingId(mandateId);
+    setActionError('');
     try {
       await api.revokeOwnerMandate(mandateId);
+      setConfirmRevokeId(null);
       await load();
     } catch (e: any) {
-      alert(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
+      setActionError(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
     } finally { setRevokingId(null); }
   }
 
@@ -278,7 +284,6 @@ export default function OwnerPage() {
                           className="w-full bg-green-600 text-white rounded-xl py-2.5 font-semibold disabled:opacity-60 hover:bg-green-700 transition-colors">
                           {otpVerifying ? '...' : '✓ ຢືນຢັນ + ເປີດໃຊ້ Listing'}
                         </button>
-                        <p className="text-xs text-gray-400 text-center">Demo OTP: 123456</p>
                       </div>
                     </div>
                   )}
@@ -360,36 +365,68 @@ export default function OwnerPage() {
               </div>
 
               {/* Actions */}
+              {actionError && approvingId === null && revokingId === null && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-2">{actionError}</p>
+              )}
               <div className="flex gap-2">
-                {m.status === 'requested' && (
+                {m.status === 'requested' && confirmApproveId !== m.id && confirmRevokeId !== m.id && (
                   <>
-                    <button
-                      onClick={() => approveMandate(m.id)}
-                      disabled={approvingId === m.id}
-                      className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-green-700 disabled:opacity-60 transition-colors"
-                    >
-                      <CheckCircle2 size={15} />
-                      {approvingId === m.id ? '...' : 'ອະນຸມັດ'}
+                    <button onClick={() => { setConfirmApproveId(m.id); setConfirmRevokeId(null); setActionError(''); }}
+                      className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-green-700 transition-colors">
+                      <CheckCircle2 size={15} /> ອະນຸມັດ
                     </button>
-                    <button
-                      onClick={() => revokeMandate(m.id)}
-                      disabled={revokingId === m.id}
-                      className="flex-1 flex items-center justify-center gap-2 border border-red-300 text-red-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-red-50 disabled:opacity-60 transition-colors"
-                    >
-                      {revokingId === m.id ? '...' : 'ປະຕິເສດ'}
+                    <button onClick={() => { setConfirmRevokeId(m.id); setConfirmApproveId(null); setActionError(''); }}
+                      className="flex-1 flex items-center justify-center gap-2 border border-red-300 text-red-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-red-50 transition-colors">
+                      ປະຕິເສດ
                     </button>
                   </>
                 )}
-                {m.status === 'active' && (
-                  <button
-                    onClick={() => revokeMandate(m.id)}
-                    disabled={revokingId === m.id}
-                    className="flex-1 flex items-center justify-center gap-2 border border-red-300 text-red-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-red-50 disabled:opacity-60 transition-colors"
-                  >
-                    {revokingId === m.id ? '...' : 'ຍົກເລີກ Mandate'}
+                {m.status === 'requested' && confirmApproveId === m.id && (
+                  <div className="flex-1 bg-green-50 border border-green-300 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2">
+                    <span className="text-sm text-green-700 font-semibold">ຢືນຢັນອະນຸມັດ?</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => approveMandate(m.id)} disabled={approvingId === m.id}
+                        className="bg-green-600 text-white text-xs px-3 py-1.5 rounded-lg font-semibold disabled:opacity-60">
+                        {approvingId === m.id ? '...' : 'ແມ່ນ'}
+                      </button>
+                      <button onClick={() => setConfirmApproveId(null)}
+                        className="border text-xs px-3 py-1.5 rounded-lg hover:bg-gray-50">ບໍ່</button>
+                    </div>
+                  </div>
+                )}
+                {m.status === 'requested' && confirmRevokeId === m.id && (
+                  <div className="flex-1 bg-red-50 border border-red-300 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2">
+                    <span className="text-sm text-red-700 font-semibold">ຢືນຢັນປະຕິເສດ?</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => revokeMandate(m.id)} disabled={revokingId === m.id}
+                        className="bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg font-semibold disabled:opacity-60">
+                        {revokingId === m.id ? '...' : 'ແມ່ນ'}
+                      </button>
+                      <button onClick={() => setConfirmRevokeId(null)}
+                        className="border text-xs px-3 py-1.5 rounded-lg hover:bg-gray-50">ບໍ່</button>
+                    </div>
+                  </div>
+                )}
+                {m.status === 'active' && confirmRevokeId !== m.id && (
+                  <button onClick={() => { setConfirmRevokeId(m.id); setActionError(''); }}
+                    className="flex-1 flex items-center justify-center gap-2 border border-red-300 text-red-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-red-50 transition-colors">
+                    ຍົກເລີກ Mandate
                   </button>
                 )}
-                {(m.status === 'revoked' || m.status === 'expired') && (
+                {m.status === 'active' && confirmRevokeId === m.id && (
+                  <div className="flex-1 bg-red-50 border border-red-300 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2">
+                    <span className="text-sm text-red-700 font-semibold">ຢືນຢັນຍົກເລີກ?</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => revokeMandate(m.id)} disabled={revokingId === m.id}
+                        className="bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg font-semibold disabled:opacity-60">
+                        {revokingId === m.id ? '...' : 'ແມ່ນ'}
+                      </button>
+                      <button onClick={() => setConfirmRevokeId(null)}
+                        className="border text-xs px-3 py-1.5 rounded-lg hover:bg-gray-50">ບໍ່</button>
+                    </div>
+                  </div>
+                )}
+                {['revoked', 'expired', 'renounced'].includes(m.status) && (
                   <div className="flex-1 text-center text-xs text-gray-400 py-2">ສິ້ນສຸດແລ້ວ</div>
                 )}
               </div>
@@ -436,9 +473,12 @@ export default function OwnerPage() {
             ))}
           </div>
 
-          <div className="mt-5 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-700 flex items-start gap-2">
-            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-            <span>ການຈັດເກັບໄຟລ໌ຈິງ (Cloud Storage) ຈະຖືກນຳໃຊ້ໃນ Production — ລະຫວ່າງ MVP ນີ້ເປັນການສາທິດ UI.</span>
+          <div className="mt-5 bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 text-sm text-amber-800 flex items-start gap-3">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5 text-amber-600" />
+            <div>
+              <p className="font-bold mb-0.5">ຫມາຍເຫດ: ຍັງບໍ່ໄດ້ເຊື່ອມຕໍ່ Cloud Storage</p>
+              <p className="text-xs text-amber-700">ການອັບໂຫຼດໄຟລ໌ໃນຮູບແບບນີ້ຍັງ<strong>ບໍ່ຖືກບັນທຶກຈິງ</strong> — ຈະຖືກເປີດໃຊ້ຫຼັງ Go Live. ກະລຸນາຕິດຕໍ່ Admin ເພື່ອສົ່ງເອກະສານໂດຍກົງ.</p>
+            </div>
           </div>
         </div>
       )}
@@ -451,5 +491,6 @@ const STATUS_LAO: Record<string, string> = {
   active: 'ເປີດໃຊ້', draft: 'ຮ່າງ', pending_owner: 'ລໍຖ້າ', sold: 'ຂາຍແລ້ວ', archived: 'ເກັບໄວ້',
 };
 const MANDATE_LAO: Record<string, string> = {
-  requested: 'ລໍຖ້າ', active: 'Active', revoked: 'ຖືກຍົກເລີກ', expired: 'ໝົດອາຍຸ',
+  requested: 'ລໍຖ້າ', active: 'Active', revoked: 'ຖືກຍົກເລີກ',
+  renounced: 'ນາຍໜ້າຖອນ', expired: 'ໝົດອາຍຸ',
 };

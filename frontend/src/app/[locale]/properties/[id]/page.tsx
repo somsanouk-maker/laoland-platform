@@ -12,6 +12,13 @@ const MapView = dynamic(() => import('../../../../components/MapView'), { ssr: f
 
 type InquiryType = 'info' | 'viewing';
 
+const STATUS_LAO: Record<string, string> = {
+  active:        'ເປີດໃຊ້',
+  pending_owner: 'ລໍຖ້າ',
+  sold:          'ຂາຍແລ້ວ',
+  archived:      'ເກັບໄວ້',
+};
+
 export default function PropertyDetailPage({ params }: { params: { id: string; locale: string } }) {
   const t = useTranslations('showroom');
   const tl = useTranslations('landType');
@@ -190,9 +197,11 @@ export default function PropertyDetailPage({ params }: { params: { id: string; l
             )}
           </div>
           <span className={`text-xs px-2 py-0.5 rounded ${
-            p.status === 'active' ? 'bg-green-100 text-green-700' :
-            p.status === 'sold' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
-          }`}>{p.status}</span>
+            p.status === 'active'   ? 'bg-green-100 text-green-700' :
+            p.status === 'sold'     ? 'bg-blue-100 text-blue-700' :
+            p.status === 'archived' ? 'bg-gray-100 text-gray-500' :
+                                      'bg-amber-100 text-amber-700'
+          }`}>{STATUS_LAO[p.status] ?? p.status}</span>
         </div>
 
         <h1 className="text-2xl font-bold mb-1">{p.district}, {p.province}</h1>
@@ -202,8 +211,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string; l
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="text-xs text-gray-400 mb-1">{td('price')}</div>
             <div className="text-2xl font-bold text-brand">
-              {p.owner_set_price ? Number(p.owner_set_price).toLocaleString() : '—'}
-              <span className="text-sm font-normal ml-1">{p.price_currency}</span>
+              {p.owner_set_price ? format(p.owner_set_price) : '—'}
             </div>
             {p.price_locked && (
               <div className="text-xs text-green-600 mt-1">🔒 {td('priceLocked')}</div>

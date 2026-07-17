@@ -6,7 +6,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import {
   Search, Briefcase, Globe, LayoutDashboard, PlusSquare,
   KanbanSquare, FileText, Users, Home, CheckSquare,
-  TrendingUp, UserCircle, Heart, LogOut, Menu, X, ChevronDown
+  TrendingUp, UserCircle, Heart, LogOut, Menu, X, ChevronDown,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from './LocaleSwitcher';
@@ -36,7 +37,6 @@ export default function Sidebar() {
   // Role-based links
   const brokerLinks: NavItem[] = [
     { href: p('/workshop'), label: t('dashboard'), icon: <LayoutDashboard size={18} /> },
-    { href: p('/workshop'), label: t('addProperty'), icon: <PlusSquare size={18} /> },
     { href: p('/workshop/pipeline'), label: t('pipeline'), icon: <KanbanSquare size={18} /> },
     { href: p('/workshop/mandates'), label: t('myMandates'), icon: <FileText size={18} /> },
     { href: p('/workshop/cobroke'), label: t('cobroke'), icon: <Users size={18} /> },
@@ -53,15 +53,24 @@ export default function Sidebar() {
     { href: p('/buyer/saved'), label: t('savedProperties'), icon: <Heart size={18} /> },
   ];
 
+  const adminLinks: NavItem[] = [
+    { href: p('/admin/users'), label: 'ຜູ້ໃຊ້ງານ', icon: <Users size={18} /> },
+    { href: p('/admin/properties'), label: 'ທີ່ດິນ', icon: <Home size={18} /> },
+    { href: p('/admin/mandates'), label: 'Mandates', icon: <FileText size={18} /> },
+    { href: p('/admin/audit-log'), label: 'Audit Log', icon: <ShieldCheck size={18} /> },
+  ];
+
   const roleLinks =
     user?.role === 'broker' ? brokerLinks :
-    user?.role === 'owner' ? ownerLinks :
-    user?.role === 'buyer' ? buyerLinks : [];
+    user?.role === 'owner'  ? ownerLinks  :
+    user?.role === 'buyer'  ? buyerLinks  :
+    user?.role === 'admin'  ? adminLinks  : [];
 
   const roleLabelMap: Record<string, string> = {
     broker: t('roleBroker'),
-    owner: t('roleOwner'),
-    buyer: t('roleBuyer'),
+    owner:  t('roleOwner'),
+    buyer:  t('roleBuyer'),
+    admin:  'Admin',
   };
 
   const NavLink = ({ item }: { item: NavItem }) => (
@@ -129,7 +138,8 @@ export default function Sidebar() {
           <>
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-1">
               {user?.role === 'broker' ? t('sectionWorkshop') :
-               user?.role === 'owner' ? t('sectionOwner') : t('sectionBuyer')}
+               user?.role === 'owner'  ? t('sectionOwner')    :
+               user?.role === 'admin'  ? 'Admin Portal'       : t('sectionBuyer')}
             </div>
             {roleLinks.map((item) => <NavLink key={item.href + item.label} item={item} />)}
           </>

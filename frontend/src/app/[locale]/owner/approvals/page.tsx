@@ -11,6 +11,7 @@ import { useCurrency } from '../../../../contexts/CurrencyContext';
 const STATUS_STYLE: Record<string, string> = {
   active:    'bg-green-100 text-green-700',
   revoked:   'bg-red-100 text-red-600',
+  renounced: 'bg-orange-100 text-orange-700',
   expired:   'bg-gray-100 text-gray-500',
   requested: 'bg-yellow-100 text-yellow-700',
 };

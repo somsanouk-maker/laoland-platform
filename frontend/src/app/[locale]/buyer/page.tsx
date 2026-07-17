@@ -33,6 +33,8 @@ export default function BuyerPage() {
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
   // Profile form state
   const [profileForm, setProfileForm] = useState({
@@ -68,6 +70,8 @@ export default function BuyerPage() {
 
   async function saveProfile() {
     setSavingProfile(true);
+    setProfileSaved(false);
+    setProfileError('');
     try {
       const saved = await api.saveBuyerProfile({
         preferredProvinces: profileForm.provinces,
@@ -77,9 +81,10 @@ export default function BuyerPage() {
         notes: profileForm.notes || undefined,
       });
       setProfile(saved);
-      alert('✓ ບັນທຶກ Profile ສຳເລັດ — ລະບົບຈະ Auto-Match ທີ່ດິນໃຫ້ທ່ານ');
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 4000);
     } catch (e: any) {
-      alert(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
+      setProfileError(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
     } finally { setSavingProfile(false); }
   }
 
@@ -89,7 +94,7 @@ export default function BuyerPage() {
       await api.confirmViewing(viewingId);
       await load();
     } catch (e: any) {
-      alert(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
+      setProfileError(e.data?.error ?? e.message ?? 'ເກີດຂໍ້ຜິດພາດ');
     } finally { setConfirmingId(null); }
   }
 
@@ -369,6 +374,14 @@ export default function BuyerPage() {
               />
             </div>
 
+            {profileSaved && (
+              <div className="bg-green-50 border border-green-300 rounded-xl px-4 py-3 text-sm text-green-700 font-semibold flex items-center gap-2">
+                <CheckCircle2 size={16} /> ບັນທຶກ Profile ສຳເລັດ — ລະບົບຈະ Auto-Match ທີ່ດິນໃຫ້ທ່ານ
+              </div>
+            )}
+            {profileError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600">{profileError}</div>
+            )}
             <button
               onClick={saveProfile}
               disabled={savingProfile}
