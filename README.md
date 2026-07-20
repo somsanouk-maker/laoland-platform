@@ -92,6 +92,43 @@ npm run dev          # http://localhost:4000
 
 # 3. Frontend
 cd ../frontend
+cp .env.example .env
 npm install
 npm run dev          # http://localhost:3000
 ```
+
+> **⚠️ ລຳດັບການ Start ສຳຄັນ:** ຕ້ອງ start ຖານຂໍ້ມູນ (Docker) **ກ່ອນ** backend ສະເໝີ.
+> ຖ້າ backend ຂຶ້ນກ່ອນ DB ຈະເຫັນ error `Failed to fetch` ຢູ່ໜ້າເວັບ.
+> ຖ້າ container ຢຸດຢູ່ແລ້ວ: `docker start laoland_db` (ຫຼື `docker compose up -d`).
+
+---
+
+## 5. Team Onboarding — ການທົດສອບ ແລະ Login
+
+### 5.1 Dev OTP Bypass (ທົດສອບ Login ໄວ)
+ໃນໄລຍະ dev, WhatsApp OTP ຈິງບໍ່ໄດ້ສົ່ງ. ໃຫ້ຕັ້ງ `DEV_OTP` ໃນ `backend/.env`:
+
+```bash
+# backend/.env
+DEV_OTP=123456
+```
+
+ຈາກນັ້ນ **ທຸກ user** ສາມາດ login ດ້ວຍ code `123456` (ຂ້າມການສົ່ງ WhatsApp).
+
+> **🔒 Production Warning:** `DEV_OTP` ຕ້ອງ **ຖອດອອກ/ບໍ່ຕັ້ງຄ່າ** ໃນ production —
+> ຖ້າຍັງຕັ້ງໄວ້ ທຸກ account ຈະເຂົ້າໄດ້ດ້ວຍ code ດຽວ. (ຄ່ານີ້ຢູ່ໃນ `.env` local ເທົ່ານັ້ນ, ບໍ່ push ຂຶ້ນ git.)
+
+### 5.2 Seed Users (ຈາກ `seed.sql`)
+ໃຊ້ເບີລຸ່ມນີ້ + OTP `123456` ເພື່ອທົດສອບແຕ່ລະ role:
+
+| Role | ເບີ WhatsApp | ໜ້າຫຼັກ | ໃຊ້ທົດສອບ |
+|------|--------------|---------|-----------|
+| **Admin** | `+8562055500000` | `/lo/admin/users` | ຈັດການ users, properties, mandates, audit log |
+| **Broker** | `+8562055500001` | `/lo/workshop` | Dashboard, Pipeline, Mandates, Co-broking |
+| **Owner** | `+8562055500003` | `/lo/owner` | ທີ່ດິນ, ອະນຸມັດ Mandate, ຕະຫຼາດ |
+| **Buyer** | `+8562055500004` | `/lo/buyer` | Profile, Auto-Match, ທີ່ດິນທີ່ບັນທຶກ |
+
+> ຢູ່ໜ້າ Login ໃສ່ສະເພາະ **10 ຫຼັກຫຼັງ** `+856` (ເຊັ່ນ `2055500000`).
+
+### 5.3 ພາສາ (i18n)
+ສະຫຼັບ ລາວ / EN / 中文 ໄດ້ຈາກປຸ່ມມຸມລຸ່ມຊ້າຍ. URL ຈະປ່ຽນ prefix (`/lo`, `/en`, `/zh`).
