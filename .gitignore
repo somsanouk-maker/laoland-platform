@@ -27,3 +27,6 @@ postgres_data/
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Claude Code local tooling config
+.claude/
