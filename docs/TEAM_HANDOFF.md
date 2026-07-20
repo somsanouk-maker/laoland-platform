@@ -100,10 +100,10 @@ Every item below is a **real gap found in the current code**. Priorities: 🔴 b
 | B1 | WhatsApp OTP | `services/whatsapp.ts` logs to console (stub). No real send. | 🔴 | Backend |
 | B2 | Auth secrets | `JWT_SECRET` defaults to dev value; `DEV_OTP` bypass must be OFF in prod (`config/env.ts`) | 🔴 | Backend |
 | B3 | Image storage | Defaults to `local` disk; R2 client exists but unconfigured (`services/storage.ts`) | 🟠 | Backend |
-| B4 | FX rates | Exchange rates **hardcoded** in `contexts/CurrencyContext.tsx` — needs live source | 🟠 | Backend (API) + Frontend (consume) |
+| B4 | FX rates | Exchange rates **hardcoded** in `contexts/CurrencyContext.tsx` — source = **BOL daily rates** (see D4) | 🟠 | Backend (API) + Frontend (consume) |
 | B5 | Owner doc vault | Uploads are **mock**, not persisted per property (`owner/page.tsx` L65) | 🟠 | Backend + Frontend |
 | B6 | Tests | Zero automated tests across the repo | 🟠 | All |
-| B7 | CI/CD & deploy | No pipeline, no app Dockerfile, no hosting/staging | 🔴 | Backend (lead) + All |
+| B7 | CI/CD & deploy | No pipeline, no app Dockerfile — target = **DigitalOcean** (see D2) | 🔴 | Backend (lead) + All |
 | B8 | API contract doc | No OpenAPI/Swagger; Mobile dev needs a stable contract | 🟠 | Backend |
 | B9 | Mobile app | Does not exist | 🟠 | Mobile |
 | B10 | Observability | No structured logging/error tracking (Sentry etc.) | 🟡 | Backend |
@@ -119,16 +119,16 @@ Every item below is a **real gap found in the current code**. Priorities: 🔴 b
 
 **Sprint 1 (highest impact first):**
 1. **B8 — Publish the API contract.** Add OpenAPI/Swagger (or a clear Markdown API reference) covering every endpoint, auth header, and response shape. *This unblocks Mobile — do it first.*
-2. **B1 — Wire real WhatsApp Cloud API** in `services/whatsapp.ts` (credentials already scaffolded in `env.ts`/`.env.example`). Keep the stub as automatic fallback when no token is set.
+2. **B1 — Wire real WhatsApp Cloud API** in `services/whatsapp.ts` (credentials already scaffolded in `env.ts`/`.env.example`). Keep the stub as automatic fallback when no token is set. *The owner provisions the WhatsApp Business account and hands you the phone ID + token (D3).*
 3. **B2 — Production auth hardening.** Enforce a real `JWT_SECRET`, fail-fast if it's the default in `NODE_ENV=production`, and make sure `DEV_OTP` cannot be active in prod.
 
 **Sprint 2:**
 4. **B3 — Turn on R2 storage** for images (set `STORAGE_PROVIDER=r2` + creds); verify upload/delete round-trip.
 5. **B5 — Real owner document vault** — persist uploaded docs per property via the storage service; expose secure fetch.
-6. **B4 — FX rate endpoint** — replace hardcoded rates with a small `/fx/rates` endpoint backed by a real source (cache daily).
+6. **B4 — FX rate endpoint** — replace hardcoded rates with a small `/fx/rates` endpoint sourced from the **Bank of the Lao PDR (BOL)** daily reference rates (`bol.gov.la`). BOL has no clean public API, so fetch + parse the published daily-rate page on a **daily schedule** and cache. Handle weekends/holidays by serving the **last known** rate (with an "as of" date). Cover LAK↔USD and LAK↔THB.
 7. **B6 — Test foundation** — add integration tests for the critical flows: OTP→JWT login, de-duplication, mandate approval, referral lock.
 
-**Ongoing:** B7 (deploy pipeline, with owner input on host), B10 (logging/error tracking).
+**Ongoing:** B7 — **deploy to DigitalOcean (D2)**: containerize backend + web, provision a Managed PostgreSQL (must support **PostGIS**), set up staging + production, and a GitHub Actions pipeline. B10 (logging/error tracking).
 
 ---
 
@@ -156,9 +156,11 @@ Every item below is a **real gap found in the current code**. Priorities: 🔴 b
 
 **Before writing code — depends on Backend §5.1 item 1 (API contract).** You can start setup/design in parallel.
 
+**Framework: React Native + Expo (decided — D1).** The team already knows React/TypeScript, so types and API-client logic can be shared with the web frontend.
+
 **Sprint 0 (setup & scaffolding):**
-1. Confirm framework with the owner (see §7 — recommendation: **React Native + Expo**, because the team already knows React/TypeScript and can share types/logic with the web frontend).
-2. Scaffold the app under `mobile/`, wire the API base URL, and implement the **OTP → JWT login** flow (mirror `frontend/src/lib/api.ts` + `AuthContext`).
+1. Scaffold the Expo app under `mobile/`, set up TypeScript, navigation, and the API base URL (point at `api.laoland.la` in prod, `localhost:4000` in dev).
+2. Implement the **OTP → JWT login** flow (mirror `frontend/src/lib/api.ts` + `AuthContext`); store the JWT securely (Expo SecureStore).
 
 **Sprint 1 (Buyer flows):**
 3. Showroom: browse/search properties, property detail (respect masking rules — never show hidden owner/broker contact).
@@ -183,15 +185,26 @@ Every item below is a **real gap found in the current code**. Priorities: 🔴 b
 
 ---
 
-## 7. Open decisions — need the owner's input
+## 7. Resolved Decisions (owner-confirmed, 2026-07-20)
 
-These block or shape specific work; please decide with the team:
+| # | Decision | Impact |
+|---|----------|--------|
+| **D1** | **Mobile = React Native + Expo** — team knows React/TS; share types/logic with web | Unblocks §5.3 |
+| **D2** | **Hosting = DigitalOcean (cloud)** — containers for backend + web, **Managed PostgreSQL with PostGIS**, staging + prod | Shapes B7 |
+| **D3** | **WhatsApp Business account = owner-provisioned** — owner creates it and hands Backend the phone ID + token | Unblocks B1 |
+| **D4** | **FX source = Bank of the Lao PDR (BOL)** daily reference rates (`bol.gov.la`), fetched/parsed daily and cached | Shapes B4 |
+| **D5** | **Domains (proposed — confirm registration)** — see table below | CORS, R2 public domain, deep-links |
 
-1. **Mobile framework** — React Native (Expo) *[recommended: shares React/TS with web]* vs. Flutter vs. native. → unblocks §5.3.
-2. **Hosting / deployment target** — where do backend, DB, and web run in production? (VPS, Render/Railway, cloud, on-prem in Laos?) → shapes B7.
-3. **WhatsApp Business account** — who provisions the WhatsApp Cloud API number, phone ID, and token? → unblocks B1.
-4. **FX rate source** — which provider/feed for LAK↔USD/THB, and how often to refresh? → shapes B4.
-5. **Production domain(s)** — for CORS (`ALLOWED_ORIGINS`), R2 public image domain, and app deep-links.
+**D5 — Proposed domain scheme** (using the Lao `.la` ccTLD; register `laoland.la` or swap the root if a different domain is owned):
+
+| Purpose | Production | Staging |
+|---------|-----------|---------|
+| Web app | `laoland.la` (+ `www.laoland.la`) | `staging.laoland.la` |
+| Backend API | `api.laoland.la` | `api.staging.laoland.la` |
+| Property images (R2 CDN) | `images.laoland.la` | — |
+| Mobile deep-link scheme | `laoland://` (+ universal link on `laoland.la`) | — |
+
+> Action for owner: **register the domain** and point DNS at DigitalOcean. Backend sets `ALLOWED_ORIGINS` and `R2_PUBLIC_DOMAIN` from this scheme once confirmed.
 
 ---
 
