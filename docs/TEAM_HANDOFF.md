@@ -159,7 +159,7 @@ Every item below is a **real gap found in the current code**. Priorities: 🔴 b
 **Framework: React Native + Expo (decided — D1).** The team already knows React/TypeScript, so types and API-client logic can be shared with the web frontend.
 
 **Sprint 0 (setup & scaffolding):**
-1. Scaffold the Expo app under `mobile/`, set up TypeScript, navigation, and the API base URL (point at `api.laoland.la` in prod, `localhost:4000` in dev).
+1. Scaffold the Expo app under `mobile/`, set up TypeScript, navigation, and the API base URL (point at `api.asangha.la` in prod, `localhost:4000` in dev).
 2. Implement the **OTP → JWT login** flow (mirror `frontend/src/lib/api.ts` + `AuthContext`); store the JWT securely (Expo SecureStore).
 
 **Sprint 1 (Buyer flows):**
@@ -193,16 +193,16 @@ Every item below is a **real gap found in the current code**. Priorities: 🔴 b
 | **D2** | **Hosting = DigitalOcean (cloud)** — containers for backend + web, **Managed PostgreSQL with PostGIS**, staging + prod | Shapes B7 |
 | **D3** | **WhatsApp Business account = owner-provisioned** — owner creates it and hands Backend the phone ID + token | Unblocks B1 |
 | **D4** | **FX source = Bank of the Lao PDR (BOL)** daily reference rates (`bol.gov.la`), fetched/parsed daily and cached | Shapes B4 |
-| **D5** | **Domains (proposed — confirm registration)** — see table below | CORS, R2 public domain, deep-links |
+| **D5** | **Domain = `asangha.la`** (pending registration) — see table below | CORS, R2 public domain, deep-links |
 
-**D5 — Proposed domain scheme** (using the Lao `.la` ccTLD; register `laoland.la` or swap the root if a different domain is owned):
+**D5 — Domain scheme = `asangha.la`** (Lao `.la` ccTLD; owner to register `asangha.la` and point DNS at DigitalOcean):
 
 | Purpose | Production | Staging |
 |---------|-----------|---------|
-| Web app | `laoland.la` (+ `www.laoland.la`) | `staging.laoland.la` |
-| Backend API | `api.laoland.la` | `api.staging.laoland.la` |
-| Property images (R2 CDN) | `images.laoland.la` | — |
-| Mobile deep-link scheme | `laoland://` (+ universal link on `laoland.la`) | — |
+| Web app | `asangha.la` (+ `www.asangha.la`) | `staging.asangha.la` |
+| Backend API | `api.asangha.la` | `api.staging.asangha.la` |
+| Property images (R2 CDN) | `images.asangha.la` | — |
+| Mobile deep-link scheme | `asangha://` (+ universal link on `asangha.la`) | — |
 
 > Action for owner: **register the domain** and point DNS at DigitalOcean. Backend sets `ALLOWED_ORIGINS` and `R2_PUBLIC_DOMAIN` from this scheme once confirmed.
 
