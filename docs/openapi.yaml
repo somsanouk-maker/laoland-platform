@@ -1,0 +1,1225 @@
+openapi: 3.0.3
+info:
+  title: LaoLand Platform API
+  version: 1.0.0
+  description: |
+    REST API for the LaoLand real-estate brokerage platform (Lao PDR).
+
+    **Auth:** WhatsApp-OTP → JWT Bearer (7-day). Send `Authorization: Bearer <token>`
+    on protected endpoints. Obtain a token via `POST /auth/login/request-otp`
+    then `POST /auth/login/verify`.
+
+    **Roles:** `buyer`, `owner`, `broker`, `admin`. Each protected endpoint lists
+    the roles allowed in its description. A 403 is returned if the caller's role is
+    not permitted.
+
+    **Base path:** every route is served under `/api` (already included in the
+    server URLs below).
+
+    **Notes for clients (web & mobile):**
+    - Business rules (de-duplication, first-referral lock, contact masking,
+      single-price lock) live server-side. Clients must not replicate them.
+    - Buyer/owner contact details are masked by the server on co-broke and
+      inquiry flows — never expect raw counter-party phone numbers.
+  contact:
+    name: LaoLand project owner (Somsanouk)
+
+servers:
+  - url: http://localhost:4000/api
+    description: Local development
+  - url: https://api.staging.asangha.la/api
+    description: Staging
+  - url: https://api.asangha.la/api
+    description: Production
+
+tags:
+  - name: Auth
+    description: Login via WhatsApp OTP → JWT
+  - name: Properties
+    description: Showroom search/detail (public) + Workshop create/manage (broker)
+  - name: Owners
+    description: Owner gatekeeping, single-price activation, mandate approvals
+  - name: Mandates
+    description: Mandate lifecycle, first-referral protection, co-broking + masking
+  - name: Pipeline
+    description: Broker sales pipeline (CRM Kanban)
+  - name: Monetization
+    description: Currency-locked quotes + foreign-buyer eligibility wizard
+  - name: Buyers
+    description: Buyer profile, saved properties, viewing history
+  - name: Admin
+    description: Admin portal — users, properties, mandates, audit log
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ============================ AUTH ============================
+  /auth/login/request-otp:
+    post:
+      tags: [Auth]
+      summary: Request a login OTP (sent via WhatsApp)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  description: E.164 phone, e.g. "+8562055500000"
+                  example: "+8562055500000"
+      responses:
+        '200':
+          description: OTP sent (or logged in dev/stub mode)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sent: { type: boolean, example: true }
+                  expiresInMinutes: { type: integer, example: 5 }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/login/verify:
+    post:
+      tags: [Auth]
+      summary: Verify OTP → receive JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone: { type: string, example: "+8562055500000" }
+                code:  { type: string, example: "123456" }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: JWT bearer token (7-day)
+                  user: { $ref: '#/components/schemas/AuthUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  # ========================= PROPERTIES =========================
+  /properties:
+    get:
+      tags: [Properties]
+      summary: Search active properties (Showroom — public)
+      security: []
+      parameters:
+        - { in: query, name: province,   schema: { type: string } }
+        - { in: query, name: district,   schema: { type: string } }
+        - { in: query, name: landType,   schema: { $ref: '#/components/schemas/LandType' } }
+        - { in: query, name: minPrice,   schema: { type: number } }
+        - { in: query, name: maxPrice,   schema: { type: number } }
+        - { in: query, name: greenBadge, schema: { type: boolean } }
+        - { in: query, name: limit,      schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { in: query, name: offset,     schema: { type: integer, minimum: 0 } }
+      responses:
+        '200':
+          description: Matching properties
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Property' }
+    post:
+      tags: [Properties]
+      summary: Create a property (broker/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PropertyCreate' }
+      responses:
+        '201':
+          description: Created property
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Property' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /properties/market-stats:
+    get:
+      tags: [Properties]
+      summary: Aggregate market statistics (public)
+      security: []
+      responses:
+        '200':
+          description: Market stats summary
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /properties/{id}:
+    get:
+      tags: [Properties]
+      summary: Property detail (public)
+      security: []
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200':
+          description: Property detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Property' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Properties]
+      summary: Edit non-locked property fields (broker/admin; admin may change price)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PropertyEdit' }
+      responses:
+        '200':
+          description: Updated property
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Property' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /properties/{id}/brokers:
+    get:
+      tags: [Properties]
+      summary: List active-mandate brokers for a property (public; for buyer broker selection)
+      security: []
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200':
+          description: Active mandate brokers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    mandate_id:   { type: string, format: uuid }
+                    mandate_type: { $ref: '#/components/schemas/MandateType' }
+                    is_exclusive: { type: boolean }
+                    broker_id:    { type: string, format: uuid }
+                    broker_name:  { type: string }
+
+  /properties/{id}/inquire:
+    post:
+      tags: [Properties]
+      summary: Buyer requests info or a viewing (routed through mandate broker — Buffer Layer)
+      security: []
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, buyerName, buyerPhone]
+              properties:
+                type:       { type: string, enum: [info, viewing] }
+                buyerName:  { type: string }
+                buyerPhone: { type: string }
+                message:    { type: string }
+                buyerId:    { type: string, format: uuid, description: Optional — if the buyer is a registered user }
+      responses:
+        '201':
+          description: Inquiry created as a pipeline deal
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:    { type: boolean }
+                  dealId:     { type: string, format: uuid }
+                  brokerName: { type: string }
+                  type:       { type: string, enum: [info, viewing] }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /properties/check-duplicate:
+    post:
+      tags: [Properties]
+      summary: Pre-create de-duplication check (broker/admin)
+      description: |
+        Detects a duplicate by (1) title-deed number, (2) GPS within `DEDUP_RADIUS_METERS`
+        (default 30 m), or (3) perceptual-hash image similarity. If a duplicate exists,
+        returns a `redirectTo` to the request-mandate flow.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lng]
+              properties:
+                titleDeedNo:  { type: string, nullable: true }
+                lat:          { type: number }
+                lng:          { type: number }
+                imagePhashes: { type: array, items: { type: string } }
+      responses:
+        '200':
+          description: Duplicate check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  duplicate:  { type: boolean }
+                  propertyId: { type: string, format: uuid, nullable: true }
+                  redirectTo: { type: string, nullable: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /properties/{id}/sold:
+    post:
+      tags: [Properties]
+      summary: Mark a property sold (broker/admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200': { description: Marked sold }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /properties/{id}/archive:
+    post:
+      tags: [Properties]
+      summary: Archive a property (broker/admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200': { description: Archived }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /properties/images/hash:
+    post:
+      tags: [Properties]
+      summary: Compute perceptual hashes for candidate images (broker/admin)
+      description: Upload up to 10 images (multipart field `images`); returns pHashes for the de-dup check.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '200':
+          description: Perceptual hashes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  phashes: { type: array, items: { type: string } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /properties/{id}/images:
+    post:
+      tags: [Properties]
+      summary: Upload & persist property images (broker/admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '201': { description: Images stored }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /properties/{id}/images/{imageId}:
+    delete:
+      tags: [Properties]
+      summary: Delete a property image (broker/admin)
+      parameters:
+        - { $ref: '#/components/parameters/PathId' }
+        - { in: path, name: imageId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Image deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ============================ OWNERS ============================
+  /owners/otp/request:
+    post:
+      tags: [Owners]
+      summary: Owner requests an action OTP (role owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId]
+              properties:
+                propertyId: { type: string, format: uuid }
+                purpose:
+                  type: string
+                  enum: [activate_listing, confirm_price, revoke_broker]
+                  default: activate_listing
+      responses:
+        '200': { description: OTP sent }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /owners/otp/verify:
+    post:
+      tags: [Owners]
+      summary: Owner verifies OTP → activate listing + lock single price (role owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId, code, ownerSetPrice, priceCurrency]
+              properties:
+                propertyId:    { type: string, format: uuid }
+                code:          { type: string, minLength: 6, maxLength: 6 }
+                ownerSetPrice: { type: number, minimum: 0 }
+                priceCurrency: { $ref: '#/components/schemas/Currency' }
+      responses:
+        '200': { description: Listing activated, price locked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /owners/properties:
+    get:
+      tags: [Owners]
+      summary: List the owner's properties (role owner)
+      responses:
+        '200':
+          description: Owner properties
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Property' } }
+
+  /owners/mandates:
+    get:
+      tags: [Owners]
+      summary: List mandates on the owner's properties (role owner)
+      responses:
+        '200':
+          description: Owner mandates
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Mandate' } }
+
+  /owners/mandates/{id}/approve:
+    post:
+      tags: [Owners]
+      summary: Approve a requested mandate (role owner)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200': { description: Mandate approved }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /owners/mandates/{id}/revoke:
+    post:
+      tags: [Owners]
+      summary: Revoke an active mandate (role owner)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200': { description: Mandate revoked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # =========================== MANDATES ===========================
+  /mandates/link/{slug}:
+    get:
+      tags: [Mandates]
+      summary: Resolve a broker trackable link (public)
+      security: []
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Resolved link target
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /mandates:
+    get:
+      tags: [Mandates]
+      summary: List the broker's mandates (broker/admin)
+      responses:
+        '200':
+          description: Mandates
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Mandate' } }
+    post:
+      tags: [Mandates]
+      summary: Request a mandate on a property (broker/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId]
+              properties:
+                propertyId:    { type: string, format: uuid }
+                isExclusive:   { type: boolean }
+                commissionPct: { type: number, minimum: 0, maximum: 100, default: 3 }
+      responses:
+        '200':
+          description: Mandate requested
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Mandate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /mandates/{id}/renounce:
+    patch:
+      tags: [Mandates]
+      summary: Broker renounces their own mandate (broker/admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200': { description: Mandate renounced }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /mandates/referrals:
+    post:
+      tags: [Mandates]
+      summary: Register a first-referral (locks buyer to broker for REFERRAL_PROTECT_DAYS, default 90) (broker/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId, buyerPhoneE164]
+              properties:
+                propertyId:     { type: string, format: uuid }
+                buyerPhoneE164: { type: string, pattern: '^\+\d{8,15}$' }
+                buyerId:        { type: string, format: uuid }
+      responses:
+        '200': { description: Referral registered }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /mandates/referrals/check:
+    post:
+      tags: [Mandates]
+      summary: Check whether a buyer is under referral protection for a property (broker/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId, buyerPhoneE164]
+              properties:
+                propertyId:     { type: string, format: uuid }
+                buyerPhoneE164: { type: string }
+      responses:
+        '200':
+          description: Protection status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  protected:      { type: boolean }
+                  protectedUntil: { type: string, format: date-time, nullable: true }
+
+  /mandates/brokers:
+    get:
+      tags: [Mandates]
+      summary: List brokers (for co-broke selection) (broker/admin)
+      responses:
+        '200':
+          description: Brokers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:        { type: string, format: uuid }
+                    full_name: { type: string }
+
+  /mandates/cobroke:
+    get:
+      tags: [Mandates]
+      summary: List the broker's co-broke arrangements (broker/admin)
+      responses:
+        '200':
+          description: Co-broke list
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/CoBroke' } }
+    post:
+      tags: [Mandates]
+      summary: Propose a co-broke split (broker/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId, cobrokeBrokerId]
+              properties:
+                propertyId:      { type: string, format: uuid }
+                cobrokeBrokerId: { type: string, format: uuid }
+                buyerId:         { type: string, format: uuid }
+                splitListingPct: { type: number, minimum: 0, maximum: 100 }
+                splitCobrokePct: { type: number, minimum: 0, maximum: 100 }
+      responses:
+        '200':
+          description: Co-broke proposed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CoBroke' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /mandates/cobroke/{id}/accept:
+    post:
+      tags: [Mandates]
+      summary: Accept a co-broke proposal (broker/admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200': { description: Accepted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /mandates/cobroke/{id}/reject:
+    post:
+      tags: [Mandates]
+      summary: Reject a co-broke proposal (broker/admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200': { description: Rejected }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /mandates/cobroke/{id}/buyer:
+    get:
+      tags: [Mandates]
+      summary: Get the buyer for a co-broke — MASKED contact (broker/admin)
+      description: The listing broker's buyer contact is masked; the co-broke broker never receives raw buyer details.
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200':
+          description: Masked buyer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buyerName:        { type: string, description: May be partially masked }
+                  buyerPhoneMasked: { type: string, example: "+8562055****00" }
+
+  # =========================== PIPELINE ===========================
+  /pipeline/board:
+    get:
+      tags: [Pipeline]
+      summary: The broker's Kanban board (broker/admin)
+      responses:
+        '200':
+          description: Deals grouped by stage
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  /pipeline:
+    post:
+      tags: [Pipeline]
+      summary: Create a pipeline deal (broker/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId]
+              properties:
+                propertyId: { type: string, format: uuid }
+                mandateId:  { type: string, format: uuid }
+                buyerId:    { type: string, format: uuid }
+                amount:     { type: number, minimum: 0 }
+                currency:   { $ref: '#/components/schemas/Currency' }
+      responses:
+        '201':
+          description: Deal created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Deal' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /pipeline/{id}/stage:
+    patch:
+      tags: [Pipeline]
+      summary: Move a deal to another stage (broker/admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage]
+              properties:
+                stage: { $ref: '#/components/schemas/PipelineStage' }
+      responses:
+        '200':
+          description: Updated deal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Deal' }
+
+  /pipeline/{id}/log-viewing:
+    post:
+      tags: [Pipeline]
+      summary: Log a GPS-verified viewing (starts the 90-day referral lock) (broker/admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lng]
+              properties:
+                lat:   { type: number, minimum: -90, maximum: 90 }
+                lng:   { type: number, minimum: -180, maximum: 180 }
+                notes: { type: string }
+      responses:
+        '200': { description: Viewing logged }
+
+  /pipeline/stats:
+    get:
+      tags: [Pipeline]
+      summary: Broker performance stats (broker/admin)
+      responses:
+        '200':
+          description: Stats
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  # ========================= MONETIZATION =========================
+  /monetization/quotes:
+    post:
+      tags: [Monetization]
+      summary: Create a currency-locked quote (public)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId, baseCurrency, quoteCurrency, baseAmount]
+              properties:
+                propertyId:    { type: string, format: uuid }
+                baseCurrency:  { $ref: '#/components/schemas/Currency' }
+                quoteCurrency: { $ref: '#/components/schemas/Currency' }
+                baseAmount:    { type: number, minimum: 0.01 }
+      responses:
+        '201':
+          description: Locked quote
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+
+  /monetization/quotes/{id}:
+    get:
+      tags: [Monetization]
+      summary: Fetch a quote (and its expiry status) (public)
+      security: []
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200':
+          description: Quote
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /monetization/foreign-wizard:
+    post:
+      tags: [Monetization]
+      summary: Foreign-buyer land eligibility wizard (public, tri-lingual output)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [buyerNationality]
+              properties:
+                buyerNationality:       { type: string, enum: [lao, foreign] }
+                hasLaoRegisteredEntity: { type: boolean }
+                intent:                 { type: string, enum: [buy_land, lease_land, buy_condo] }
+                leaseYears:             { type: integer, minimum: 1 }
+                lang:                   { $ref: '#/components/schemas/Lang' }
+      responses:
+        '200':
+          description: Eligibility result + recommended structure
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eligible:              { type: boolean }
+                  recommendedStructure:  { type: string }
+                  notes:                 { type: array, items: { type: string } }
+                  fallback:              { type: string, nullable: true }
+
+  # ============================ BUYERS ============================
+  /buyers/profile:
+    get:
+      tags: [Buyers]
+      summary: Get the buyer's profile & preferences (buyer/admin)
+      responses:
+        '200':
+          description: Buyer profile (may be empty if not yet set)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BuyerProfile' }
+    put:
+      tags: [Buyers]
+      summary: Upsert the buyer's profile & preferences (buyer/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preferredProvinces:  { type: array, items: { type: string } }
+                preferredDistricts:  { type: array, items: { type: string } }
+                preferredLandTypes:  { type: array, items: { type: string } }
+                budgetMinLak:        { type: number, minimum: 0 }
+                budgetMaxLak:        { type: number, minimum: 0 }
+                notes:               { type: string }
+      responses:
+        '200':
+          description: Saved profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BuyerProfile' }
+
+  /buyers/saved:
+    get:
+      tags: [Buyers]
+      summary: List saved properties (with broker info) (buyer/admin)
+      responses:
+        '200':
+          description: Saved properties
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/SavedProperty' } }
+    post:
+      tags: [Buyers]
+      summary: Save a property (optionally selecting a broker) (buyer/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId]
+              properties:
+                propertyId: { type: string, format: uuid }
+                brokerId:   { type: string, format: uuid }
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:       { type: string, format: uuid }
+                  saved_at: { type: string, format: date-time }
+
+  /buyers/saved/{propertyId}:
+    delete:
+      tags: [Buyers]
+      summary: Unsave a property (buyer/admin)
+      parameters:
+        - { in: path, name: propertyId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Removed
+          content:
+            application/json:
+              schema: { type: object, properties: { removed: { type: boolean } } }
+
+  /buyers/viewings:
+    get:
+      tags: [Buyers]
+      summary: GPS-verified viewing history (buyer/admin)
+      responses:
+        '200':
+          description: Viewings
+          content:
+            application/json:
+              schema: { type: array, items: { type: object, additionalProperties: true } }
+
+  /buyers/viewings/{id}/confirm:
+    post:
+      tags: [Buyers]
+      summary: Buyer confirms attendance of a viewing (buyer/admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200': { description: Confirmed }
+
+  # ============================ ADMIN ============================
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List all users (admin)
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/User' } }
+
+  /admin/users/{id}/deactivate:
+    patch:
+      tags: [Admin]
+      summary: Soft-delete (deactivate) a user — cannot deactivate admins (admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200':
+          description: Deactivated
+          content:
+            application/json:
+              schema: { type: object, properties: { deactivated: { type: boolean } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/users/{id}/activate:
+    patch:
+      tags: [Admin]
+      summary: Re-activate a user (admin)
+      parameters: [{ $ref: '#/components/parameters/PathId' }]
+      responses:
+        '200':
+          description: Activated
+          content:
+            application/json:
+              schema: { type: object, properties: { activated: { type: boolean } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/properties:
+    get:
+      tags: [Admin]
+      summary: List all properties (admin)
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+      responses:
+        '200':
+          description: Properties
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Property' } }
+
+  /admin/mandates:
+    get:
+      tags: [Admin]
+      summary: List all mandates (admin)
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+      responses:
+        '200':
+          description: Mandates
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Mandate' } }
+
+  /admin/audit-log:
+    get:
+      tags: [Admin]
+      summary: List audit-log entries (admin)
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Offset' }
+      responses:
+        '200':
+          description: Audit entries
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/AuditEntry' } }
+
+# ============================ COMPONENTS ============================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PathId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Offset:
+      in: query
+      name: offset
+      schema: { type: integer, minimum: 0, default: 0 }
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing/invalid token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Authenticated but role not permitted
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Too many requests (rate-limited)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    # ---- Enums ----
+    Role:          { type: string, enum: [buyer, owner, broker, admin] }
+    Lang:          { type: string, enum: [lo, en, zh] }
+    Currency:      { type: string, enum: [LAK, USD, THB] }
+    LandType:      { type: string, enum: [residential, agricultural, industrial, commercial] }
+    DeedType:      { type: string, enum: [titled, survey, tax_receipt, white_paper] }
+    PropertyStatus: { type: string, enum: [draft, pending_owner, active, sold, archived] }
+    MandateType:   { type: string, enum: [exclusive, open] }
+    MandateStatus: { type: string, enum: [requested, active, revoked, renounced, expired] }
+    PipelineStage: { type: string, enum: [inquiry, viewing, negotiation, deposit, closed, lost] }
+    CoBrokeStatus: { type: string, enum: [proposed, accepted, rejected, closed] }
+    QuoteStatus:   { type: string, enum: [locked, expired, honored] }
+
+    # ---- Core entities ----
+    Error:
+      type: object
+      properties:
+        error:   { type: string, description: Human-readable message (may be Lao) }
+        details: { type: object, additionalProperties: true, nullable: true }
+
+    AuthUser:
+      type: object
+      properties:
+        id:   { type: string, format: uuid }
+        role: { $ref: '#/components/schemas/Role' }
+        name: { type: string }
+
+    User:
+      type: object
+      properties:
+        id:          { type: string, format: uuid }
+        full_name:   { type: string }
+        phone_e164:  { type: string }
+        role:        { $ref: '#/components/schemas/Role' }
+        is_active:   { type: boolean }
+        created_at:  { type: string, format: date-time }
+
+    Property:
+      type: object
+      description: Field set varies slightly by endpoint (search vs detail vs admin list).
+      properties:
+        id:              { type: string, format: uuid }
+        title_deed_no:   { type: string, nullable: true }
+        deed_type:       { $ref: '#/components/schemas/DeedType' }
+        land_type:       { $ref: '#/components/schemas/LandType' }
+        lat:             { type: number }
+        lng:             { type: number }
+        area_sqm:        { type: number, nullable: true }
+        province:        { type: string }
+        district:        { type: string }
+        village:         { type: string, nullable: true }
+        address_text:    { type: string, nullable: true }
+        owner_set_price: { type: number, nullable: true }
+        price_currency:  { $ref: '#/components/schemas/Currency' }
+        price_locked:    { type: boolean }
+        owner_verified:  { type: boolean }
+        green_badge:     { type: boolean }
+        status:          { $ref: '#/components/schemas/PropertyStatus' }
+        created_at:      { type: string, format: date-time }
+
+    PropertyCreate:
+      type: object
+      required: [deedType, landType, lat, lng, province, district]
+      properties:
+        titleDeedNo:   { type: string, nullable: true }
+        deedType:      { $ref: '#/components/schemas/DeedType' }
+        landType:      { $ref: '#/components/schemas/LandType' }
+        lat:           { type: number, minimum: -90, maximum: 90 }
+        lng:           { type: number, minimum: -180, maximum: 180 }
+        areaSqm:       { type: number }
+        province:      { type: string }
+        district:      { type: string }
+        village:       { type: string }
+        addressText:   { type: string }
+        ownerSetPrice: { type: number, minimum: 0 }
+        priceCurrency: { $ref: '#/components/schemas/Currency' }
+        imagePhashes:  { type: array, items: { type: string } }
+
+    PropertyEdit:
+      type: object
+      properties:
+        province:         { type: string }
+        district:         { type: string }
+        village:          { type: string }
+        addressText:      { type: string }
+        landType:         { $ref: '#/components/schemas/LandType' }
+        deedType:         { $ref: '#/components/schemas/DeedType' }
+        areaSqm:          { type: number }
+        ownerSetPrice:    { type: number, minimum: 0, description: Admin only }
+        priceCurrency:    { $ref: '#/components/schemas/Currency' }
+        priceChangeReason:{ type: string }
+
+    Mandate:
+      type: object
+      properties:
+        id:             { type: string, format: uuid }
+        property_id:    { type: string, format: uuid }
+        broker_id:      { type: string, format: uuid, nullable: true }
+        broker_name:    { type: string, nullable: true }
+        mandate_type:   { $ref: '#/components/schemas/MandateType' }
+        status:         { $ref: '#/components/schemas/MandateStatus' }
+        is_exclusive:   { type: boolean }
+        commission_pct: { type: number }
+        created_at:     { type: string, format: date-time }
+        approved_at:    { type: string, format: date-time, nullable: true }
+        revoked_at:     { type: string, format: date-time, nullable: true }
+
+    CoBroke:
+      type: object
+      properties:
+        id:               { type: string, format: uuid }
+        property_id:      { type: string, format: uuid }
+        status:           { $ref: '#/components/schemas/CoBrokeStatus' }
+        split_listing_pct:{ type: number }
+        split_cobroke_pct:{ type: number }
+        created_at:       { type: string, format: date-time }
+
+    Deal:
+      type: object
+      properties:
+        id:          { type: string, format: uuid }
+        property_id: { type: string, format: uuid }
+        broker_id:   { type: string, format: uuid }
+        buyer_id:    { type: string, format: uuid, nullable: true }
+        stage:       { $ref: '#/components/schemas/PipelineStage' }
+        amount:      { type: number, nullable: true }
+        currency:    { $ref: '#/components/schemas/Currency' }
+        created_at:  { type: string, format: date-time }
+
+    Quote:
+      type: object
+      properties:
+        id:             { type: string, format: uuid }
+        property_id:    { type: string, format: uuid }
+        base_currency:  { $ref: '#/components/schemas/Currency' }
+        quote_currency: { $ref: '#/components/schemas/Currency' }
+        base_amount:    { type: number }
+        quoted_amount:  { type: number }
+        rate:           { type: number }
+        status:         { $ref: '#/components/schemas/QuoteStatus' }
+        expires_at:     { type: string, format: date-time }
+
+    BuyerProfile:
+      type: object
+      properties:
+        buyer_id:             { type: string, format: uuid }
+        preferred_provinces:  { type: array, items: { type: string }, nullable: true }
+        preferred_districts:  { type: array, items: { type: string }, nullable: true }
+        preferred_land_types: { type: array, items: { type: string }, nullable: true }
+        budget_min_lak:       { type: number, nullable: true }
+        budget_max_lak:       { type: number, nullable: true }
+        notes:                { type: string, nullable: true }
+        updated_at:           { type: string, format: date-time }
+
+    SavedProperty:
+      type: object
+      properties:
+        saved_id:        { type: string, format: uuid }
+        saved_at:        { type: string, format: date-time }
+        broker_id:       { type: string, format: uuid, nullable: true }
+        broker_name:     { type: string, nullable: true }
+        id:              { type: string, format: uuid, description: property id }
+        province:        { type: string }
+        district:        { type: string }
+        village:         { type: string, nullable: true }
+        land_type:       { $ref: '#/components/schemas/LandType' }
+        owner_set_price: { type: number, nullable: true }
+        price_currency:  { $ref: '#/components/schemas/Currency' }
+        area_sqm:        { type: number, nullable: true }
+        green_badge:     { type: boolean }
+        status:          { $ref: '#/components/schemas/PropertyStatus' }
+        lat:             { type: number }
+        lng:             { type: number }
+
+    AuditEntry:
+      type: object
+      properties:
+        id:         { type: string, format: uuid }
+        action:     { type: string }
+        entity:     { type: string }
+        entity_id:  { type: string, format: uuid, nullable: true }
+        meta:       { type: object, additionalProperties: true, nullable: true }
+        actor_name: { type: string, nullable: true }
+        actor_role: { $ref: '#/components/schemas/Role' }
+        created_at: { type: string, format: date-time }

@@ -104,7 +104,7 @@ Every item below is a **real gap found in the current code**. Priorities: 🔴 b
 | B5 | Owner doc vault | Uploads are **mock**, not persisted per property (`owner/page.tsx` L65) | 🟠 | Backend + Frontend |
 | B6 | Tests | Zero automated tests across the repo | 🟠 | All |
 | B7 | CI/CD & deploy | No pipeline, no app Dockerfile — target = **DigitalOcean** (see D2) | 🔴 | Backend (lead) + All |
-| B8 | API contract doc | No OpenAPI/Swagger; Mobile dev needs a stable contract | 🟠 | Backend |
+| B8 | API contract doc | ✅ **Drafted** — [`docs/openapi.yaml`](./openapi.yaml) (OpenAPI 3.0.3, all ~54 endpoints). Backend to keep it in sync + serve Swagger UI | 🟠 | Backend |
 | B9 | Mobile app | Does not exist | 🟠 | Mobile |
 | B10 | Observability | No structured logging/error tracking (Sentry etc.) | 🟡 | Backend |
 | B11 | Accessibility & responsive | Web not audited for a11y / small screens | 🟡 | Frontend |
@@ -118,7 +118,7 @@ Every item below is a **real gap found in the current code**. Priorities: 🔴 b
 **Mission:** make the API production-ready, integrations real, and unblock the Mobile dev with a stable contract.
 
 **Sprint 1 (highest impact first):**
-1. **B8 — Publish the API contract.** Add OpenAPI/Swagger (or a clear Markdown API reference) covering every endpoint, auth header, and response shape. *This unblocks Mobile — do it first.*
+1. **B8 — Own the API contract.** A first-draft OpenAPI spec already exists at [`docs/openapi.yaml`](./openapi.yaml) (3.0.3, ~54 endpoints, generated from the current routes). Your job: **serve Swagger UI** (e.g. `swagger-ui-express` at `/api/docs`), keep the spec **in sync** as endpoints change, and fill in any response bodies marked `additionalProperties: true`. *This is what unblocks Mobile.*
 2. **B1 — Wire real WhatsApp Cloud API** in `services/whatsapp.ts` (credentials already scaffolded in `env.ts`/`.env.example`). Keep the stub as automatic fallback when no token is set. *The owner provisions the WhatsApp Business account and hands you the phone ID + token (D3).*
 3. **B2 — Production auth hardening.** Enforce a real `JWT_SECRET`, fail-fast if it's the default in `NODE_ENV=production`, and make sure `DEV_OTP` cannot be active in prod.
 
@@ -154,7 +154,7 @@ Every item below is a **real gap found in the current code**. Priorities: 🔴 b
 
 **Mission:** build the customer-facing mobile app on top of the existing REST API. Start with the two roles that benefit most from mobile: **Buyer** and **Owner**.
 
-**Before writing code — depends on Backend §5.1 item 1 (API contract).** You can start setup/design in parallel.
+**Your contract is [`docs/openapi.yaml`](./openapi.yaml)** — you can generate a typed API client from it (e.g. `openapi-typescript` / `orval`) and start immediately, in parallel with Backend serving live Swagger UI.
 
 **Framework: React Native + Expo (decided — D1).** The team already knows React/TypeScript, so types and API-client logic can be shared with the web frontend.
 
